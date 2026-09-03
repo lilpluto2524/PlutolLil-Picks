@@ -51,6 +51,8 @@ body.light .bx{border-color:rgba(0,0,0,.06);}
 .wrap{max-width:900px;margin:0 auto;}
 .gc{background:rgba(137,207,240,.03);border:1px solid rgba(137,207,240,.08);border-radius:10px;padding:10px;margin:8px 0;position:relative;transition:transform 0.2s ease,box-shadow 0.3s ease;}
 .gc:hover{transform:translateY(-3px);box-shadow:0 10px 30px rgba(0,0,0,.35);}
+.gc.glow-win{border:2px solid #66bb6a !important;box-shadow:0 0 12px rgba(102,187,106,0.5) !important;}
+.gc.glow-loss{border:2px solid #ef5350 !important;box-shadow:0 0 12px rgba(239,83,80,0.5) !important;}
 .gt{display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#888;margin-bottom:6px;}
 .gm{display:flex;align-items:center;justify-content:space-between;gap:8px;}
 .tc{text-align:center;flex:1;}
@@ -1494,7 +1496,8 @@ var trkEntry=Trk.d.p.find(function(x){return x.g===g.gpk;});
 var resultBadge='';
 if(trkEntry&&trkEntry.w===true)resultBadge='<div class="result-badge win">W</div>';
 else if(trkEntry&&trkEntry.w===false)resultBadge='<div class="result-badge loss">L</div>';
-
+var spResult='';var ouResult='';var fiResult='';
+if(trkEntry&&trkEntry.bl){if(trkEntry.bl.spW===true)spResult='spW';else if(trkEntry.bl.spW===false)spResult='spL';if(trkEntry.bl.ouW===true)ouResult='ouW';else if(trkEntry.bl.ouW===false)ouResult='ouL';if(trkEntry.bl.fiW===true)fiResult='fiW';else if(trkEntry.bl.fiW===false)fiResult='fiL';}
 h+='<div class="gc" data-gpk="'+g.gpk+'" data-conf="'+g.pred.conf+'" data-fav="'+(isFav?1:0)+'">';
 h+=resultBadge;
 h+='<button class="fav-star '+(isFav?'on':'')+'" data-fav-gpk="'+g.gpk+'">'+(isFav?'&#9733;':'&#9734;')+'</button>';
@@ -1526,9 +1529,9 @@ if(g.status==='Live'){var ls=g.gm.linescore;var lhSc=g.gm.teams.home.score||0;va
 
 h+='<div class="bl">';
 h+='<div class="bx"><div class="bt">L10</div><div class="bv">'+getL10(g.hId)+' / '+getL10(g.aId)+'</div></div>';
-h+='<div class="bx"><div class="bt">Spread</div><div class="bv">'+g.bl.spTxt+'</div></div>';
-h+='<div class="bx"><div class="bt">O/U</div><div class="bv">'+g.bl.ouPk+' '+g.bl.ouLine+'</div></div>';
-h+='<div class="bx"><div class="bt">YRFI</div><div class="bv"><span class="fi-badge '+(g.fi.pick==='YRFI'?'fi-yrfi':'fi-nrfi')+'">'+g.fi.pick+' '+(g.fi.yrfiProb*100).toFixed(0)+'%</span></div></div>';
+h+='<div class="bx" style="'+(spResult==='spW'?'border:2px solid #66bb6a;box-shadow:0 0 6px rgba(102,187,106,0.4)':(spResult==='spL'?'border:2px solid #ef5350;box-shadow:0 0 6px rgba(239,83,80,0.4)':''))+'"><div class="bt">Spread</div><div class="bv">'+g.bl.spTxt+'</div></div>';
+h+='<div class="bx" style="'+(ouResult==='ouW'?'border:2px solid #66bb6a;box-shadow:0 0 6px rgba(102,187,106,0.4)':(ouResult==='ouL'?'border:2px solid #ef5350;box-shadow:0 0 6px rgba(239,83,80,0.4)':''))+'"><div class="bt">O/U</div><div class="bv">'+g.bl.ouPk+' '+g.bl.ouLine+'</div></div>';
+h+='<div class="bx" style="'+(fiResult==='fiW'?'border:2px solid #66bb6a;box-shadow:0 0 6px rgba(102,187,106,0.4)':(fiResult==='fiL'?'border:2px solid #ef5350;box-shadow:0 0 6px rgba(239,83,80,0.4)':''))+'"><div class="bt">YRFI</div><div class="bv"><span class="fi-badge '+(g.fi.pick==='YRFI'?'fi-yrfi':'fi-nrfi')+'">'+g.fi.pick+' '+(g.fi.yrfiProb*100).toFixed(0)+'%</span></div></div>';
 h+='</div>';
 
 h+=vegasDisplay(g.vegasOdds);
@@ -1571,6 +1574,7 @@ buildTicker(cardData,'mlb');
 buildDigest(cardData,'mlb');
 document.getElementById('last-upd').textContent='Last updated: '+new Date().toLocaleTimeString();
 bindGameEvents(el);
+document.querySelectorAll('.gc').forEach(function(card){var gpk=card.getAttribute('data-gpk');var te=Trk.d.p.find(function(x){return x.g===gpk;});if(te&&te.w===true)card.classList.add('glow-win');else if(te&&te.w===false)card.classList.add('glow-loss');});
 }catch(e){
 el.innerHTML='<div class="er">Error loading games: '+e.message+'</div>';
 }
@@ -1727,7 +1731,9 @@ if(hWp>0.6&&aWp>0.6)impBadge='<span class="importance-badge imp-div">Marquee Mat
 else if(hWp>0.55&&aWp>0.55)impBadge='<span class="importance-badge imp-pen">Playoff Implications</span>';
 else if((hWp>0.55&&aWp<0.4)||(aWp>0.55&&hWp<0.4))impBadge='<span class="importance-badge imp-wc">Mismatch Alert</span>';
 
-h+='<div class="gc" data-gpk="'+g.gpk+'" data-conf="'+g.pred.conf+'" data-fav="'+(isFav?1:0)+'">';
+var cardGlowClass='';if(trkEntry&&trkEntry.w===true)cardGlowClass=' glow-win';else if(trkEntry&&trkEntry.w===false)cardGlowClass=' glow-loss';
+h+='<div class="gc'+cardGlowClass+'" data-gpk="'+g.gpk+'" data-conf="'+g.pred.conf+'" data-fav="'+(isFav?1:0)+'">';
+h+='<div class="gc" style="'+cardGlow+'" data-gpk="'+g.gpk+'" data-conf="'+g.pred.conf+'" data-fav="'+(isFav?1:0)+'">';
 h+=resultBadge;
 h+='<button class="fav-star '+(isFav?'on':'')+'" data-fav-gpk="'+g.gpk+'">'+(isFav?'&#9733;':'&#9734;')+'</button>';
 
@@ -1792,6 +1798,7 @@ buildTicker(parsedGames,'nfl');
 buildDigest(parsedGames,'nfl');
 document.getElementById('last-upd').textContent='Last updated: '+new Date().toLocaleTimeString();
 bindGameEvents(el);
+document.querySelectorAll('.gc').forEach(function(card){var gpk=card.getAttribute('data-gpk');var te=Trk.d.p.find(function(x){return x.g===gpk;});if(te&&te.w===true)card.classList.add('glow-win');else if(te&&te.w===false)card.classList.add('glow-loss');});
 }catch(e){
 el.innerHTML='<div class="er">Error loading NFL games: '+e.message+'</div>';
 }
