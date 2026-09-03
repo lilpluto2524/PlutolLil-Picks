@@ -462,7 +462,25 @@ if(!e||e.w!==null)return false;
 e.hSc=hSc;e.aSc=aSc;
 var winner=hSc>aSc?e.hT:e.aT;
 e.w=(e.pk===winner);
-if(inn1h!==undefined){e.inn1h=inn1h;e.inn1a=inn1a;}
+if(e.bl&&typeof e.bl==='object'){
+var totalRuns=hSc+aSc;
+var margin=hSc-aSc;
+if(e.bl.spread!==undefined&&e.bl.spread!==null){
+var spVal=Math.abs(e.bl.spread)||1.5;
+var spFav=e.bl.spFav||e.hT;
+if(spFav===e.hT)e.bl.spW=(margin>spVal);
+else e.bl.spW=((-margin)>spVal);
+}
+if(e.bl.ouLine!==undefined&&e.bl.ouLine!==null){
+if(e.bl.ouPk==='Over')e.bl.ouW=(totalRuns>e.bl.ouLine);
+else e.bl.ouW=(totalRuns<e.bl.ouLine);
+}
+if(e.bl.fiPk!==undefined&&e.bl.fiPk!==null){
+var firstInnRuns=(inn1h||0)+(inn1a||0);
+if(e.bl.fiPk==='YRFI')e.bl.fiW=(firstInnRuns>0);
+else e.bl.fiW=(firstInnRuns===0);
+}
+}
 this.save();
 return true;
 },
@@ -597,6 +615,13 @@ f.sp_fip=((aSP.fip-hSP.fip)/3)*0.04;
 f.sp_bb9=((aSP.bb9-hSP.bb9)/2)*0.02;
 f.sp_ip=((hSP.ip-aSP.ip)/2)*0.02;
 }else{f.sp_era=0;f.sp_whip=0;f.sp_k9=0;f.sp_fip=0;f.sp_bb9=0;f.sp_ip=0;}
+var hBp=hD.bp||{},aBp=aD.bp||{};
+var hBpEra=hBp.era||4.0,aBpEra=aBp.era||4.0;
+var hBpWhip=hBp.whip||1.30,aBpWhip=aBp.whip||1.30;
+var hBpK9=hBp.k9||8.5,aBpK9=aBp.k9||8.5;
+f.bp_era=((aBpEra-hBpEra)/3)*0.04;
+f.bp_whip=((aBpWhip-hBpWhip)/0.4)*0.02;
+f.bp_k9=((hBpK9-aBpK9)/4)*0.01;
 var hHit=hD.hit||{},aHit=aD.hit||{};
 f.ops=((hHit.ops||0.720)-(aHit.ops||0.720))/0.1*0.04;
 f.avg=((hHit.avg||0.250)-(aHit.avg||0.250))/0.05*0.02;
@@ -673,24 +698,73 @@ adj+=(8.5-avgK9)/3*0.3;
 var avgBb9=((hSP?hSP.bb9:3.0)+(aSP?aSP.bb9:3.0))/2;
 adj+=(avgBb9-3.0)/2*0.2;
 var modelTotal=vegasTotal+adj;
-var deviation=modelTotal-vegasTotal;
-var ouPk,blended;
-if(Math.abs(deviation)<0.5){blended=modelTotal;ouPk=blended>vegasTotal?'Over':'Under';}
-else if(Math.abs(deviation)<1.5){blended=modelTotal*0.4+vegasTotal*0.6;ouPk=blended>vegasTotal?'Over':'Under';}
-else{blended=modelTotal*0.55+vegasTotal*0.45;ouPk=blended>vegasTotal?'Over':'Under';}
-var totalRuns=Math.round(blended);
-if(totalRuns<2)totalRuns=2;
+var blended=(modelTotal*0.35)+(vegasTotal*0.65);
+var ouPk;
+var ouDiff=blended-vegasTotal;
+if(Math.abs(ouDiff)<0.3){ouPk=blended>=vegasTotal?'Over':'Under';}
+else{ouPk=blended>vegasTotal?'Over':'Under';}
+var totalRuns=blended;
 var hShare=pred.hp/(pred.hp+pred.ap);
-var hSc=Math.round(totalRuns*hShare);
-var aSc=totalRuns-hSc;
+var rawH=totalRuns*hShare;
+var rawA=totalRuns*(1-hShare);
+var hSpEra=hSP?hSP.era:4.5;
+var aSpEra=aSP?aSP.era:4.5;
+if(aSpEra<3.0)rawH=rawH*0.8;
+else if(aSpEra<3.5)rawH=rawH*0.9;
+if(hSpEra<3.0)rawA=rawA*0.8;
+else if(hSpEra<3.5)rawA=rawA*0.9;
+if(aSpEra>5.0)rawH=rawH*1.1;
+if(hSpEra>5.0)rawA=rawA*1.1;
+var confGap=Math.abs(pred.hp-pred.ap);
+var hWp=hD.w/(hD.w+hD.l+0.001);
+var aWp=aD.w/(aD.w+aD.l+0.001);
+var wpGap=Math.abs(hWp-aWp);
+var eraGap=Math.abs(hSpEra-aSpEra);
+var blowoutScore=(confGap*2)+(wpGap*3)+(eraGap>2?1.5:eraGap>1?0.5:0);
+if(blowoutScore>2.5){
+var fav=pred.hp>=pred.ap?'h':'a';
+if(fav==='h'){rawH=rawH*1.4;rawA=rawA*0.7;}
+else{rawA=rawA*1.4;rawH=rawH*0.7;}
+}else if(blowoutScore>1.8){
+var fav2=pred.hp>=pred.ap?'h':'a';
+if(fav2==='h'){rawH=rawH*1.2;rawA=rawA*0.85;}
+else{rawA=rawA*1.2;rawH=rawH*0.85;}
+}
+var hSc=Math.round(rawH);
+var aSc=Math.round(rawA);
+if(hSc<0)hSc=0;
+if(aSc<0)aSc=0;
 if(hSc===aSc){if(pred.hp>=pred.ap)hSc+=1;else aSc+=1;}
-hSc=Math.max(1,hSc);aSc=Math.max(1,aSc);
-var spread=aSc-hSc;
-var spTxt=(spread>0?'+':'')+spread.toFixed(1)+' '+(T[hId]?T[hId].a:'HOME');
+
+/* --- SPREAD derived from predicted score --- */
+var margin=hSc-aSc;
+var favTeam=pred.hp>=pred.ap?(T[hId]?T[hId].a:'HOME'):(T[aId]?T[aId].a:'AWAY');
+var dogTeam=pred.hp<pred.ap?(T[hId]?T[hId].a:'HOME'):(T[aId]?T[aId].a:'AWAY');
+var spread,spFav,spTxt;
+if(Math.abs(margin)>=2){
+spread=-1.5;
+spFav=favTeam;
+spTxt='-1.5 '+favTeam;
+}else{
+spread=1.5;
+spFav=dogTeam;
+spTxt='+1.5 '+dogTeam;
+}
+
+/* --- O/U derived from predicted score --- */
+var modelTotal=hSc+aSc;
+var ouPk;
+if(vegasTotal!==null&&vegasTotal!==undefined){
+ouPk=modelTotal>vegasTotal?'Over':(modelTotal<vegasTotal?'Under':'Under');
+}else{
+ouPk=modelTotal>8.5?'Over':'Under';
+}
+
+/* --- Money Lines --- */
 var hML,aML;
 if(pred.hp>0.5){hML=Math.round(-pred.hp/(1-pred.hp)*100);aML=Math.round((1-pred.hp)/pred.hp*100);}
 else{hML=Math.round((1-pred.ap)/pred.ap*100);aML=Math.round(-pred.ap/(1-pred.ap)*100);}
-return{hSc:hSc,aSc:aSc,spread:spread,spTxt:spTxt,hML:hML,aML:aML,ouLine:vegasTotal,ouPk:ouPk,modelTotal:parseFloat(blended.toFixed(1))};
+return{hSc:hSc,aSc:aSc,spread:spread,spFav:spFav,spTxt:spTxt,hML:hML,aML:aML,ouLine:vegasTotal,ouPk:ouPk,modelTotal:modelTotal};
 }
 
 /* --- MLB API Data Fetchers --- */
@@ -727,8 +801,8 @@ catch(e){return null;}
 async function getVegasOdds(){
 try{
 var d=await gfetch(ODDS_BASE+'/baseball_mlb/odds/?apiKey='+ODDS_KEY+'&regions=us&markets=h2h,spreads,totals&bookmakers=draftkings,fanduel');
+if(!d||!Array.isArray(d)||d.length===0)return{};
 var map={};
-if(!d||!Array.isArray(d))return map;
 d.forEach(function(ev){
 var key=(ev.home_team||'')+'|'+(ev.away_team||'');
 var odds={dk:{},fd:{}};
@@ -1337,15 +1411,37 @@ Object.keys(vegasMap).forEach(function(k){
 if(k.toLowerCase().indexOf(hI.n.toLowerCase())>=0||k.toLowerCase().indexOf(aI.n.toLowerCase())>=0)vKey=k;
 });
 var vegasOdds=vegasMap[vKey]||null;
-var vegasData={total:vegasOdds&&vegasOdds.dk&&vegasOdds.dk.total?vegasOdds.dk.total:(vegasOdds&&vegasOdds.fd&&vegasOdds.fd.total?vegasOdds.fd.total:null),wx:wx?wx.current_weather:null};
-
+var vegasData={total:null,spread:null,hML:null,aML:null,wx:wx?wx.current_weather:null};
+if(vegasOdds){
+vegasData.total=vegasOdds.total||(vegasOdds.dk?vegasOdds.dk.total:null)||(vegasOdds.fd?vegasOdds.fd.total:null)||null;
+vegasData.spread=(vegasOdds.dk?vegasOdds.dk.hSpread:null)||(vegasOdds.fd?vegasOdds.fd.hSpread:null)||null;
+vegasData.hML=(vegasOdds.dk?vegasOdds.dk.hML:null)||(vegasOdds.fd?vegasOdds.fd.hML:null)||null;
+vegasData.aML=(vegasOdds.dk?vegasOdds.dk.aML:null)||(vegasOdds.fd?vegasOdds.fd.aML:null)||null;
+}
+if(!vegasData.total){
+var hEra=hSP?hSP.era:4.5;
+var aEra=aSP?aSP.era:4.5;
+var hOps=hD.hit?hD.hit.ops||0.720:0.720;
+var aOps=aD.hit?aD.hit.ops||0.720:0.720;
+var hBpE=hD.bp?hD.bp.era||4.0:4.0;
+var aBpE=aD.bp?aD.bp.era||4.0:4.0;
+var hRuns=(aEra/4.5)*4.3*(hOps/0.720)*(aBpE/4.0);
+var aRuns=(hEra/4.5)*4.3*(aOps/0.720)*(hBpE/4.0);
+var pfAdj=(T[hId]?T[hId].pf:100)/100;
+var estTotal=(hRuns+aRuns)*pfAdj;
+estTotal=Math.max(5.5,Math.min(13.5,estTotal));
+vegasData.total=Math.round(estTotal*2)/2;
+vegasData.fallback=true;
+}
 var pred=predict(hD,aD,{pf:hI.pf,hId:hId,aId:aId,hSP:hSP,aSP:aSP,wx:wx});
 var bl=betLines(pred,hD,aD,hId,aId,hSP,aSP,vegasData);
 var fi=predictYRFI(hSP,aSP,hD,aD,hId,vegasData);
+var trkBl={spread:bl.spread,spFav:bl.spFav,ouLine:bl.ouLine,ouPk:bl.ouPk,fiPk:fi?fi.pick:null};
 
 var gpk='mlb_'+gm.gamePk;
 var pick=pred.hp>=0.5?hI.a:aI.a;
-Trk.add(gpk,pick,hI.a,aI.a,pred.conf,bl);
+window._plpShareData[gpk]={gpk:gpk,hId:hId,aId:aId,hI:hI,aI:aI,hD:hD,aD:aD,pred:pred,bl:bl,fi:fi,time:''};
+Trk.add(gpk,pick,hI.a,aI.a,pred.conf,trkBl);
 
 var status='pre';
 var lscore=gm.linescore;
@@ -1395,6 +1491,7 @@ else if(trkEntry&&trkEntry.w===false)resultBadge='<div class="result-badge loss"
 h+='<div class="gc" data-gpk="'+g.gpk+'" data-conf="'+g.pred.conf+'" data-fav="'+(isFav?1:0)+'">';
 h+=resultBadge;
 h+='<button class="fav-star '+(isFav?'on':'')+'" data-fav-gpk="'+g.gpk+'">'+(isFav?'&#9733;':'&#9734;')+'</button>';
+h+='<button onclick="plpShare(\''+g.gpk+'\')" style="position:absolute;top:48px;right:6px;background:none;border:none;font-size:14px;cursor:pointer;color:#89CFF0;z-index:2;">&#9993;</button>';
 
 h+='<div class="gt"><span>'+g.time;
 if(g.status==='Live')h+=' <span class="live-badge">LIVE</span>';
@@ -1497,6 +1594,7 @@ this.classList.toggle('on');
 this.innerHTML=Favs.has(gpk)?'&#9733;':'&#9734;';
 });
 });
+
 el.querySelectorAll('[data-note-gpk]').forEach(function(ta){
 ta.addEventListener('input',function(){
 GameNotes.set(this.getAttribute('data-note-gpk'),this.value);
@@ -1716,6 +1814,19 @@ h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:#66bb
 h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:#ffd54f">'+mdW+'-'+mdL+'</div><div style="font-size:8px;color:#888">MED CONF</div></div>';
 h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:#ef5350">'+loW+'-'+loL+'</div><div style="font-size:8px;color:#888">LOW CONF</div></div>';
 h+='</div>';
+h+='<div class="trk-sec"><div class="trk-sec-title">Bet Type Records</div>';
+var spW=0,spL=0,ouW=0,ouL=0,fiW=0,fiL=0;
+trk.d.p.forEach(function(e){
+if(e.w===null)return;
+if(e.bl&&e.bl.spW===true)spW++;if(e.bl&&e.bl.spW===false)spL++;
+if(e.bl&&e.bl.ouW===true)ouW++;if(e.bl&&e.bl.ouW===false)ouL++;
+if(e.bl&&e.bl.fiW===true)fiW++;if(e.bl&&e.bl.fiW===false)fiL++;
+});
+h+='<div class="conf-grid">';
+h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:#89CFF0">'+spW+'-'+spL+'</div><div style="font-size:8px;color:#888">SPREADS</div><div style="font-size:8px;color:#888">'+(spW+spL>0?((spW/(spW+spL)*100).toFixed(0)):0)+'%</div></div>';
+h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:#89CFF0">'+ouW+'-'+ouL+'</div><div style="font-size:8px;color:#888">OVER/UNDER</div><div style="font-size:8px;color:#888">'+(ouW+ouL>0?((ouW/(ouW+ouL)*100).toFixed(0)):0)+'%</div></div>';
+h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:#89CFF0">'+fiW+'-'+fiL+'</div><div style="font-size:8px;color:#888">YRFI/NRFI</div><div style="font-size:8px;color:#888">'+(fiW+fiL>0?((fiW/(fiW+fiL)*100).toFixed(0)):0)+'%</div></div>';
+h+='</div></div>';
 h+='<div class="trk-sec"><div class="trk-sec-title">Recent Picks</div>';
 var recent=trk.d.p.slice().reverse().slice(0,30);
 recent.forEach(function(e){
@@ -2329,6 +2440,75 @@ startLiveUpdates();
 }
 
 init();
+/* --- Shareable PLP Pick Card --- */
+function generatePickCard(gameData){
+var overlay=document.createElement('div');
+overlay.id='plp-share-overlay';
+overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;';
+overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
+
+var card=document.createElement('div');
+card.style.cssText='width:380px;background:linear-gradient(135deg,#0a0a1a 0%,#0d1b2a 50%,#0a0a1a 100%);border:2px solid rgba(137,207,240,0.3);border-radius:16px;padding:24px;font-family:system-ui,-apple-system,sans-serif;box-shadow:0 0 40px rgba(137,207,240,0.15);';
+
+var g=gameData;
+var hLogo='https://www.mlbstatic.com/team-logos/'+g.hId+'.svg';
+var aLogo='https://www.mlbstatic.com/team-logos/'+g.aId+'.svg';
+var pick=g.pred.hp>=0.5?g.hI:g.aI;
+var pickPct=g.pred.hp>=0.5?g.pred.hp:g.pred.ap;
+var pickLogo=g.pred.hp>=0.5?hLogo:aLogo;
+var confLvl=g.pred.conf>0.3?'HIGH':g.pred.conf>0.15?'MED':'LOW';
+var confClr=g.pred.conf>0.3?'#66bb6a':g.pred.conf>0.15?'#ffd54f':'#ef5350';
+
+var h='';
+h+='<div style="text-align:center;margin-bottom:16px">';
+h+='<div style="font-size:10px;letter-spacing:3px;color:#89CFF0;font-weight:900;margin-bottom:4px">PLUTOLIL PICKS</div>';
+h+='<div style="width:40px;height:2px;background:linear-gradient(90deg,transparent,#89CFF0,transparent);margin:0 auto 8px"></div>';
+h+='<div style="font-size:8px;color:#555;letter-spacing:1px">AI-POWERED PREDICTIONS</div>';
+h+='</div>';
+
+h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0;padding:12px;background:rgba(137,207,240,0.04);border-radius:10px;border:1px solid rgba(137,207,240,0.08)">';
+h+='<div style="text-align:center;flex:1"><img src="'+aLogo+'" style="width:40px;height:40px"><div style="font-size:12px;font-weight:800;color:#e0e0e0;margin-top:4px">'+g.aI.a+'</div><div style="font-size:10px;color:#888">'+(g.aD.w||0)+'-'+(g.aD.l||0)+'</div></div>';
+h+='<div style="text-align:center;padding:0 12px"><div style="font-size:10px;color:#888;margin-bottom:2px">'+g.time+'</div><div style="font-size:16px;font-weight:900;color:#89CFF0">VS</div></div>';
+h+='<div style="text-align:center;flex:1"><img src="'+hLogo+'" style="width:40px;height:40px"><div style="font-size:12px;font-weight:800;color:#e0e0e0;margin-top:4px">'+g.hI.a+'</div><div style="font-size:10px;color:#888">'+(g.hD.w||0)+'-'+(g.hD.l||0)+'</div></div>';
+h+='</div>';
+
+h+='<div style="text-align:center;margin:16px 0;padding:14px;background:rgba(137,207,240,0.06);border-radius:10px;border:1px solid rgba(137,207,240,0.12)">';
+h+='<div style="font-size:8px;color:#888;letter-spacing:2px;margin-bottom:6px">PLP PICK</div>';
+h+='<img src="'+pickLogo+'" style="width:32px;height:32px;margin-bottom:4px"><br>';
+h+='<div style="font-size:20px;font-weight:900;color:#89CFF0">'+pick.a+'</div>';
+h+='<div style="font-size:24px;font-weight:900;color:#e0e0e0;margin:4px 0">'+(pickPct*100).toFixed(1)+'%</div>';
+h+='<div style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:9px;font-weight:800;color:'+confClr+';background:rgba(137,207,240,0.06);border:1px solid '+confClr+'">'+confLvl+' CONFIDENCE</div>';
+h+='</div>';
+
+h+='<div style="display:flex;justify-content:space-around;margin:12px 0;padding:10px;background:rgba(137,207,240,0.03);border-radius:8px">';
+if(g.bl){
+h+='<div style="text-align:center"><div style="font-size:8px;color:#888">SPREAD</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+(g.bl.spread||'--')+'</div></div>';
+h+='<div style="text-align:center"><div style="font-size:8px;color:#888">O/U</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+(g.bl.ouPk||'--')+' '+(g.bl.ouLine||'--')+'</div></div>';
+h+='<div style="text-align:center"><div style="font-size:8px;color:#888">1ST INN</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+(g.fi?g.fi.pick:'--')+'</div></div>';
+}
+h+='</div>';
+
+h+='<div style="display:flex;justify-content:space-around;margin:8px 0;padding:8px;background:rgba(137,207,240,0.03);border-radius:8px">';
+h+='<div style="text-align:center"><div style="font-size:8px;color:#888">PRED SCORE</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+(g.bl?g.bl.hSc:'?')+'-'+(g.bl?g.bl.aSc:'?')+'</div></div>';
+if(g.bl&&g.bl.hML){
+h+='<div style="text-align:center"><div style="font-size:8px;color:#888">'+g.hI.a+' ML</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+g.bl.hML+'</div></div>';
+h+='<div style="text-align:center"><div style="font-size:8px;color:#888">'+g.aI.a+' ML</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+g.bl.aML+'</div></div>';
+}
+h+='</div>';
+
+h+='<div style="text-align:center;margin-top:12px;padding-top:10px;border-top:1px solid rgba(137,207,240,0.08)">';
+h+='<div style="font-size:7px;color:#444;letter-spacing:1px">PLUTOLIL PICKS \u2022 AI MODEL \u2022 '+new Date().toLocaleDateString()+'</div>';
+h+='</div>';
+
+card.innerHTML=h;
+overlay.appendChild(card);
+document.body.appendChild(overlay);
+}
+window._plpShareData={};
+function plpShare(gpk){
+var d=window._plpShareData[gpk];
+if(d)generatePickCard(d);
+}
 </script>
 </body>
 </html>
