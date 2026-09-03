@@ -1526,6 +1526,7 @@ if(g.status==='Live'){var ls=g.gm.linescore;var lhSc=g.gm.teams.home.score||0;va
 
 h+='<div class="bl">';
 h+='<div class="bx"><div class="bt">L10</div><div class="bv">'+getL10(g.hId)+' / '+getL10(g.aId)+'</div></div>';
+h+='<div class="bx"><div class="bt">Spread</div><div class="bv">'+g.bl.spTxt+'</div></div>';
 h+='<div class="bx"><div class="bt">O/U</div><div class="bv">'+g.bl.ouPk+' '+g.bl.ouLine+'</div></div>';
 h+='<div class="bx"><div class="bt">YRFI</div><div class="bv"><span class="fi-badge '+(g.fi.pick==='YRFI'?'fi-yrfi':'fi-nrfi')+'">'+g.fi.pick+' '+(g.fi.yrfiProb*100).toFixed(0)+'%</span></div></div>';
 h+='</div>';
