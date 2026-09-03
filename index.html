@@ -87,7 +87,7 @@ body.light .bx{border-color:rgba(0,0,0,.06);}
 .collapsible.open{display:block;}
 .fav-star{position:absolute;top:6px;right:6px;background:none;border:none;font-size:16px;cursor:pointer;color:#888;z-index:2;}
 .fav-star.on{color:#ffd54f;}
-.result-badge{position:absolute;top:6px;left:6px;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;z-index:2;}
+.result-badge{position:absolute;top:28px;left:6px;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;z-index:2;}
 .result-badge.win{background:rgba(102,187,106,.15);color:#66bb6a;border:1px solid rgba(102,187,106,.3);}
 .result-badge.loss{background:rgba(239,83,80,.12);color:#ef5350;border:1px solid rgba(239,83,80,.2);}
 .live-badge{background:rgba(239,83,80,.15);color:#ef5350;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;animation:pulse 2s infinite;}
@@ -1504,14 +1504,16 @@ GameNotes.set(this.getAttribute('data-note-gpk'),this.value);
 });
 el.querySelectorAll('.sort-btn').forEach(function(btn){
 btn.addEventListener('click',function(){
+var wasActive=this.classList.contains('active');
 el.querySelectorAll('.sort-btn').forEach(function(b){b.classList.remove('active');});
+if(wasActive){if(SPORT==='mlb')loadGames();else loadNFLGames();return;}
 this.classList.add('active');
 var sort=this.getAttribute('data-sort');
 var cards=Array.from(el.querySelectorAll('.gc'));
 cards.sort(function(a,b){
 if(sort==='conf')return parseFloat(b.getAttribute('data-conf'))-parseFloat(a.getAttribute('data-conf'));
-if(sort==='fav')return parseInt(b.getAttribute('data-fav'))-parseInt(a.getAttribute('data-fav'));
-return 0;
+if(sort==='fav'){var aFav=parseInt(a.getAttribute('data-fav'))||0;var bFav=parseInt(b.getAttribute('data-fav'))||0;if(aFav===0)a.style.display='none';else a.style.display='';if(bFav===0)b.style.display='none';else b.style.display='';return bFav-aFav;}
+if(sort==='time'){Array.from(el.querySelectorAll('.gc')).forEach(function(c){c.style.display='';});return 0;}
 });
 var sortBar=el.querySelector('.sort-bar');
 cards.forEach(function(c){el.appendChild(c);});
@@ -2330,7 +2332,6 @@ init();
 </script>
 </body>
 </html>
-
 
 
 
