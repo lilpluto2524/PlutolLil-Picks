@@ -1119,7 +1119,14 @@ function fmtML(ml){
 if(!ml&&ml!==0)return'-';
 return(ml>0?'+':'')+ml;
 }
-
+var L10Cache={};
+async function fetchL10(){
+try{
+var d=await gfetch('https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=2026');
+d.records.forEach(function(r){r.teamRecords.forEach(function(t){t.records.splitRecords.forEach(function(s){if(s.type==='lastTen')L10Cache[t.team.id]=s.wins+'-'+s.losses;});});});
+}catch(e){}
+}
+function getL10(teamId){return L10Cache[teamId]||'--';}
 /* --- Format Spread with +/- --- */
 function fmtSpread(sp){
 if(!sp&&sp!==0)return'-';
@@ -1364,7 +1371,7 @@ var sched=await gfetch(MLB_BASE+'/schedule?sportId=1&date='+dateStr+'&hydrate=te
 var games=[];
 (sched.dates||[]).forEach(function(dt){(dt.games||[]).forEach(function(gm){games.push(gm);});});
 if(games.length===0){el.innerHTML='<div class="no-data">No MLB games scheduled for '+fmtLabel(viewDate)+'</div>';buildDigest([],SPORT);return;}
-
+await fetchL10().catch(function(){});
 var vegasMap=await getVegasOdds().catch(function(){return{};});
 var allInj={};
 var cardData=[];
@@ -1518,8 +1525,7 @@ if(edgeTags)h+=edgeTags;
 if(g.status==='Live'){var ls=g.gm.linescore;var lhSc=g.gm.teams.home.score||0;var laSc=g.gm.teams.away.score||0;var inn=ls?ls.currentInningOrdinal:'';var half=ls?(ls.inningHalf||''):'';h+='<div style="text-align:center;font-size:14px;margin:4px 0;color:#ef5350;font-weight:900">LIVE: '+g.hI.a+' '+lhSc+' - '+g.aI.a+' '+laSc+' <span style="font-size:10px;color:#888">('+half+' '+inn+')</span></div>';}else if(g.status==='Final'){h+='<div style="text-align:center;font-size:12px;margin:4px 0"><strong>Final: '+g.hI.a+' '+(g.gm.teams.home.score||0)+' - '+g.aI.a+' '+(g.gm.teams.away.score||0)+'</strong></div>';}else{h+='<div style="text-align:center;font-size:10px;margin:4px 0"><strong>'+g.hI.a+' '+g.bl.hSc+' - '+g.aI.a+' '+g.bl.aSc+'</strong></div>';}
 
 h+='<div class="bl">';
-h+='<div class="bx"><div class="bt">ML</div><div class="bv">'+fmtML(g.bl.hML)+' / '+fmtML(g.bl.aML)+'</div></div>';
-h+='<div class="bx"><div class="bt">Spread</div><div class="bv">'+g.bl.spTxt+'</div></div>';
+h+='<div class="bx"><div class="bt">L10</div><div class="bv">'+getL10(g.hId)+' / '+getL10(g.aId)+'</div></div>';
 h+='<div class="bx"><div class="bt">O/U</div><div class="bv">'+g.bl.ouPk+' '+g.bl.ouLine+'</div></div>';
 h+='<div class="bx"><div class="bt">YRFI</div><div class="bv"><span class="fi-badge '+(g.fi.pick==='YRFI'?'fi-yrfi':'fi-nrfi')+'">'+g.fi.pick+' '+(g.fi.yrfiProb*100).toFixed(0)+'%</span></div></div>';
 h+='</div>';
@@ -2512,6 +2518,5 @@ if(d)generatePickCard(d);
 </script>
 </body>
 </html>
-
 
 
