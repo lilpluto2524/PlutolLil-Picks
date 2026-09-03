@@ -2469,7 +2469,7 @@ var h='';
 h+='<div style="text-align:center;margin-bottom:16px">';
 h+='<div style="font-size:10px;letter-spacing:3px;color:#89CFF0;font-weight:900;margin-bottom:4px">PLUTOLIL PICKS</div>';
 h+='<div style="width:40px;height:2px;background:linear-gradient(90deg,transparent,#89CFF0,transparent);margin:0 auto 8px"></div>';
-h+='<div style="font-size:8px;color:#555;letter-spacing:1px">AI-POWERED PREDICTIONS</div>';
+h+='<div style="font-size:8px;color:#555;letter-spacing:1px">GAME PREDICTIONS</div>';
 h+='</div>';
 
 h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0;padding:12px;background:rgba(137,207,240,0.04);border-radius:10px;border:1px solid rgba(137,207,240,0.08)">';
@@ -2496,10 +2496,8 @@ h+='</div>';
 
 h+='<div style="display:flex;justify-content:space-around;margin:8px 0;padding:8px;background:rgba(137,207,240,0.03);border-radius:8px">';
 h+='<div style="text-align:center"><div style="font-size:8px;color:#888">PRED SCORE</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+(g.bl?g.bl.hSc:'?')+'-'+(g.bl?g.bl.aSc:'?')+'</div></div>';
-if(g.bl&&g.bl.hML){
-h+='<div style="text-align:center"><div style="font-size:8px;color:#888">'+g.hI.a+' ML</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+g.bl.hML+'</div></div>';
-h+='<div style="text-align:center"><div style="font-size:8px;color:#888">'+g.aI.a+' ML</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+g.bl.aML+'</div></div>';
-}
+h+='<div style="text-align:center"><div style="font-size:8px;color:#888">'+g.hI.a+' L10</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+getL10(g.hId)+'</div></div>';
+h+='<div style="text-align:center"><div style="font-size:8px;color:#888">'+g.aI.a+' L10</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+getL10(g.aId)+'</div></div>';
 h+='</div>';
 
 h+='<div style="text-align:center;margin-top:12px;padding-top:10px;border-top:1px solid rgba(137,207,240,0.08)">';
