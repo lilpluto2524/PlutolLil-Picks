@@ -738,27 +738,20 @@ ouPk=ouModelTotal>ouLine?'Over':'Under';
 var hShare=pred.hp/(pred.hp+pred.ap);
 var rawH=ouModelTotal*hShare;
 var rawA=ouModelTotal*(1-hShare);
-var confGap=Math.abs(pred.hp-pred.ap);
-var hWp=hD.w/(hD.w+hD.l+0.001);
-var aWp=aD.w/(aD.w+aD.l+0.001);
-var wpGap=Math.abs(hWp-aWp);
-var hSpEra=hSP?hSP.era:4.5;
-var aSpEra=aSP?aSP.era:4.5;
-var eraGap=Math.abs(hSpEra-aSpEra);
-var blowoutScore=(confGap*2)+(wpGap*3)+(eraGap>2?1.5:eraGap>1?0.5:0);
-if(blowoutScore>2.5){
-var fav=pred.hp>=pred.ap?'h':'a';
-if(fav==='h'){rawH=rawH*1.3;rawA=rawA*0.75;}
-else{rawA=rawA*1.3;rawH=rawH*0.75;}
-}else if(blowoutScore>1.8){
-var fav2=pred.hp>=pred.ap?'h':'a';
-if(fav2==='h'){rawH=rawH*1.15;rawA=rawA*0.9;}
-else{rawA=rawA*1.15;rawH=rawH*0.9;}
-}
 var hSc=Math.round(rawH);
 var aSc=Math.round(rawA);
 if(hSc<0)hSc=0;
 if(aSc<0)aSc=0;
+if(hSc+aSc>ouLine&&ouPk==='Under'){
+var diff=Math.ceil((hSc+aSc)-ouLine);
+if(hSc>=aSc)aSc=Math.max(0,aSc-diff);
+else hSc=Math.max(0,hSc-diff);
+}
+if(hSc+aSc<ouLine&&ouPk==='Over'){
+var diff2=Math.ceil(ouLine-(hSc+aSc));
+if(hSc>=aSc)hSc+=diff2;
+else aSc+=diff2;
+}
 if(hSc===aSc){if(pred.hp>=pred.ap)hSc+=1;else aSc+=1;}
 
 /* --- SPREAD derived from predicted score --- */
@@ -852,10 +845,32 @@ return map;
 
 async function getInjuries(teamId){
 try{
-var d=await gfetch(MLB_BASE+'/teams/'+teamId+'/roster?rosterType=active');
-return(d.roster||[]).filter(function(p){return p.status&&p.status.code!=='A';}).map(function(p){
-return{name:p.person?p.person.fullName:'Unknown',pos:p.position?p.position.abbreviation:'',status:p.status?p.status.description:'Unknown'};
+var results=[];
+var rosters=await Promise.all([
+gfetch(MLB_BASE+'/teams/'+teamId+'/roster?rosterType=active'),
+gfetch(MLB_BASE+'/teams/'+teamId+'/roster?rosterType=fullSeason')
+]);
+var seen={};
+var keyPos=['P','SP','RP','CP','C','1B','2B','3B','SS','LF','CF','RF','DH','OF'];
+rosters.forEach(function(d){
+(d.roster||[]).forEach(function(p){
+var code=p.status?p.status.code:'A';
+if(code!=='A'&&p.person&&!seen[p.person.id]){
+seen[p.person.id]=true;
+var pos=p.position?p.position.abbreviation:'';
+var desc=p.status?p.status.description:'';
+var isIL60=desc.indexOf('60')>-1;
+var isIL10=desc.indexOf('10')>-1||desc.indexOf('15')>-1;
+var isSP=pos==='SP'||pos==='P';
+var isKeyStat=keyPos.indexOf(pos)>-1;
+if(isKeyStat&&(isIL10||isIL60)){
+results.push({name:p.person.fullName,pos:pos,status:desc,impact:isSP?'HIGH':(isIL60?'HIGH':'MED')});
+}
+}
 });
+});
+results.sort(function(a,b){return a.impact==='HIGH'?-1:1;});
+return results;
 }catch(e){return[];}
 }
 
@@ -3193,5 +3208,4 @@ el.innerHTML=h;
 </script>
 </body>
 </html>
-
 
