@@ -1238,129 +1238,128 @@ el.innerHTML='<div class="digest-stat"><div class="ds-val">'+nTotal+'</div><div 
 }
 }
 
-/* ===== PLAYER PROPS TAB (Built Natively) ===== */
+
+/* ===== PLAYER PROPS TAB ===== */
 function renderPropsTab(){
 var el=document.getElementById('tp-pp');
 if(!el)return;
-el.innerHTML='<div class="ld"><div class="spin"></div><br>Loading player props...</div>';
-Promise.all([
-gfetch(ODDS_BASE+'/baseball_mlb/odds/?apiKey='+ODDS_KEY+'&regions=us&markets=pitcher_strikeouts_alternate,pitcher_strikeouts&bookmakers=draftkings,fanduel').catch(function(){return[];}),
-gfetch(ODDS_BASE+'/baseball_mlb/odds/?apiKey='+ODDS_KEY+'&regions=us&markets=batter_hits_alternate,batter_total_bases_alternate,batter_home_runs_alternate,batter_hits,batter_total_bases,batter_home_runs&bookmakers=draftkings,fanduel').catch(function(){return[];}),
-gfetch(ODDS_BASE+'/baseball_mlb/odds/?apiKey='+ODDS_KEY+'&regions=us&markets=batter_rbis_alternate,batter_runs_scored_alternate,batter_walks_alternate,batter_rbis,batter_runs_scored,batter_walks&bookmakers=draftkings,fanduel').catch(function(){return[];})
-]).then(function(results){
-var allProps=[];
-results.forEach(function(dataset){
-if(!dataset||!Array.isArray(dataset))return;
-dataset.forEach(function(ev){
-if(!ev.bookmakers)return;
-var gn=ev.home_team+' vs '+ev.away_team;
-ev.bookmakers.forEach(function(bk){
-var book=bk.title||bk.key;
-(bk.markets||[]).forEach(function(mk){
-var mkt=mk.key||'';
-(mk.outcomes||[]).forEach(function(o){
-if(!o.description||o.point===undefined||o.point===null)return;
-allProps.push({player:o.description,nm:o.name,line:o.point,odds:o.price,market:mkt,book:book,game:gn});
-});
-});
-});
-});
-});
-if(allProps.length===0){el.innerHTML='<div class="no-data">No player props available. Props load 2-4 hours before game time.</div>';return;}
-var grp={};
-allProps.forEach(function(p){
-var k=p.player+'|'+p.market;
-if(!grp[k])grp[k]={player:p.player,market:p.market,game:p.game,lines:[]};
-grp[k].lines.push({line:p.line,nm:p.nm,odds:p.odds,book:p.book});
-});
-var cache=window._plpGameCache||[];
-var projArr=[];
-var lb={'pitcher_strikeouts':'Pitcher Ks','batter_hits':'Hits','batter_total_bases':'Total Bases','batter_home_runs':'Home Runs','batter_rbis':'RBIs','batter_runs_scored':'Runs','batter_walks':'Walks'};
-function pL(m){return lb[m]||m;}
-Object.keys(grp).forEach(function(k){
-var g=grp[k];
-var oL=null,d1=null,d2=null,f1=null,f2=null;
-g.lines.forEach(function(l){
-if(l.nm==='Over'){oL=l.line;if(l.book==='DraftKings')d1=l;if(l.book==='FanDuel')f1=l;}
-if(l.nm==='Under'){if(!oL)oL=l.line;if(l.book==='DraftKings')d2=l;if(l.book==='FanDuel')f2=l;}
-});
-var ln=oL||0;
-var pr=ln;
-var cn=0.45;
-var gd=null;
-cache.forEach(function(c){if(gd)return;if(g.game&&c.hI&&c.aI&&(g.game.toLowerCase().indexOf(c.hI.n.toLowerCase())>=0||g.game.toLowerCase().indexOf(c.aI.n.toLowerCase())>=0))gd=c;});
-if(g.market.indexOf('strikeout')>=0){
-if(gd&&gd.aD&&gd.aD.hit&&gd.aD.hit.kPct){pr=ln+(gd.aD.hit.kPct-22)/22*0.8;}
-cn=Math.min(0.75,0.45+Math.abs(pr-ln)*0.15);
-}else if(g.market.indexOf('home_run')>=0){
-if(gd&&gd.hI&&gd.hI.pf){pr=ln+(gd.hI.pf-100)/100*0.5;}
-cn=Math.min(0.65,0.35+Math.abs(pr-ln)*0.25);
-}else if(g.market.indexOf('hits')>=0||g.market.indexOf('total_bases')>=0){
-if(gd&&gd.hI&&gd.hI.pf){pr=ln+(gd.hI.pf-100)/100*0.4;}
-cn=Math.min(0.7,0.4+Math.abs(pr-ln)*0.2);
-}else if(g.market.indexOf('walk')>=0){
-if(gd&&gd.hSP&&gd.hSP.bb9){pr=ln+(gd.hSP.bb9-3.0)/3*0.4;}
-cn=Math.min(0.65,0.4+Math.abs(pr-ln)*0.2);
+var games=window._plpGameCache||[];
+if(games.length===0){
+el.innerHTML='<div class="no-data">No games loaded yet. Switch to Games tab first.</div>';
+return;
 }
-var pk=pr>ln?'Over':'Under';
-projArr.push({player:g.player,market:g.market,game:g.game,line:ln,pr:parseFloat(pr.toFixed(2)),pick:pk,conf:cn,d1:d1,d2:d2,f1:f1,f2:f2});
-});
-projArr.sort(function(a,b){return b.conf-a.conf;});
-var h='<div class="trk"><div class="trk-title">Player Props Dashboard</div>';
-h+='<div style="text-align:center;font-size:10px;color:#888;margin-bottom:8px">'+projArr.length+' props loaded</div>';
-var tops=projArr.filter(function(p){return p.conf>0.5;}).slice(0,5);
-if(tops.length>0){
-h+='<div style="background:rgba(137,207,240,.05);border:1px solid rgba(137,207,240,.1);border-radius:8px;padding:10px;margin-bottom:12px">';
-h+='<div style="font-size:11px;font-weight:800;color:#89CFF0;margin-bottom:6px">Top Prop Picks</div>';
-tops.forEach(function(tp){
-var cc=tp.conf>0.6?'hi':(tp.conf>0.45?'md':'lo');
-h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(137,207,240,.06)">';
-h+='<div><strong>'+tp.player+'</strong> <span style="font-size:9px;color:#888">'+pL(tp.market)+'</span></div>';
-h+='<span class="badge '+cc+'">'+tp.pick+' '+tp.line+'</span></div>';
-});
-h+='</div>';
+var pitchers=[];
+var hitters=[];
+games.forEach(function(g){
+if(g.hSP){
+var opp=g.aD;
+var oppOps=opp&&opp.hit?opp.hit.ops||0.720:0.720;
+var oppAvg=opp&&opp.hit?opp.hit.avg||0.250:0.250;
+var k9=g.hSP.k9||7.0;
+var ip=g.hSP.ip||80;
+var gs=g.hSP.gs||15;
+var avgIP=ip/gs;
+var predK=((k9/9)*avgIP)*(1-oppAvg)*1.2;
+predK=Math.max(2,Math.min(14,predK));
+var predER=((g.hSP.era||4.5)/9)*avgIP*(oppOps/0.720);
+predER=Math.max(0,Math.min(8,predER));
+var whip=g.hSP.whip||1.30;
+var bb9=g.hSP.bb9||3.0;
+var hPer9=((whip*9)-bb9);
+var predH=(hPer9/9)*avgIP*(oppAvg/0.250);
+predH=Math.max(2,Math.min(12,predH));
+var mmScore=0;
+if(g.hSP.era<(g.aSP?g.aSP.era:4.5))mmScore++;
+if(g.hSP.whip<(g.aSP?g.aSP.whip:1.3))mmScore++;
+if(g.hSP.k9>(g.aSP?g.aSP.k9:7))mmScore++;
+if(g.hSP.fip<(g.aSP?g.aSP.fip:4.5))mmScore++;
+pitchers.push({name:g.hSP.name||'TBD',team:g.hI.a,opp:g.aI.a,era:g.hSP.era||4.50,whip:g.hSP.whip||1.30,k9:g.hSP.k9||7.0,predK:predK,predH:predH,predER:predER,mmScore:mmScore,gs:gs});
 }
-var bm={};
-projArr.forEach(function(p){var c=pL(p.market);if(!bm[c])bm[c]=[];bm[c].push(p);});
-['Pitcher Ks','Hits','Total Bases','Home Runs','RBIs','Runs','Walks'].forEach(function(cat){
-if(!bm[cat])return;
-h+='<div class="trk-sec"><div class="trk-sec-title">'+cat+' ('+bm[cat].length+')</div>';
-bm[cat].slice(0,15).forEach(function(p){
-var cp=(p.conf*100).toFixed(0);
-var cc=p.conf>0.6?'hi':(p.conf>0.45?'md':'lo');
-var pc=p.pick==='Over'?'fi-yrfi':'fi-nrfi';
-h+='<div class="prop-card">';
-h+='<div class="prop-hdr"><span class="prop-player">'+p.player+'</span><span class="prop-game">'+p.game+'</span></div>';
-h+='<div class="prop-body">';
-h+='<div class="prop-col"><div class="prop-lbl">Line</div><div class="prop-val">'+p.line+'</div></div>';
-h+='<div class="prop-col"><div class="prop-lbl">Proj</div><div class="prop-val" style="color:'+(p.pr>p.line?'#66bb6a':'#ef5350')+'">'+p.pr.toFixed(1)+'</div></div>';
-h+='<div class="prop-col"><div class="prop-lbl">Pick</div><div class="fi-badge '+pc+'">'+p.pick+'</div></div>';
-h+='<div class="prop-col"><div class="prop-lbl">Conf</div><span class="badge '+cc+'" style="font-size:9px">'+cp+'%</span></div>';
-h+='</div>';
-h+='<div class="prop-odds">';
-if(p.d1)h+='<span class="prop-book">DK O:'+p.d1.odds+'</span>';
-if(p.d2)h+='<span class="prop-book">DK U:'+p.d2.odds+'</span>';
-if(p.f1)h+='<span class="prop-book">FD O:'+p.f1.odds+'</span>';
-if(p.f2)h+='<span class="prop-book">FD U:'+p.f2.odds+'</span>';
-h+='</div>';
-h+='<div style="text-align:right;margin-top:4px"><button class="qbet-btn" data-propbet="'+p.player+'|'+pL(p.market)+'|'+p.pick+' '+p.line+'|'+(p.pick==='Over'?(p.d1?p.d1.odds:'-110'):(p.d2?p.d2.odds:'-110'))+'">Add to Parlay</button></div>';
-h+='</div>';
+if(g.aSP){
+var opp=g.hD;
+var oppOps=opp&&opp.hit?opp.hit.ops||0.720:0.720;
+var oppAvg=opp&&opp.hit?opp.hit.avg||0.250:0.250;
+var k9=g.aSP.k9||7.0;
+var ip=g.aSP.ip||80;
+var gs=g.aSP.gs||15;
+var avgIP=ip/gs;
+var predK=((k9/9)*avgIP)*(1-oppAvg)*1.2;
+predK=Math.max(2,Math.min(14,predK));
+var predER=((g.aSP.era||4.5)/9)*avgIP*(oppOps/0.720);
+predER=Math.max(0,Math.min(8,predER));
+var whip=g.aSP.whip||1.30;
+var bb9=g.aSP.bb9||3.0;
+var hPer9=((whip*9)-bb9);
+var predH=(hPer9/9)*avgIP*(oppAvg/0.250);
+predH=Math.max(2,Math.min(12,predH));
+var mmScore=0;
+if(g.aSP.era<(g.hSP?g.hSP.era:4.5))mmScore++;
+if(g.aSP.whip<(g.hSP?g.hSP.whip:1.3))mmScore++;
+if(g.aSP.k9>(g.hSP?g.hSP.k9:7))mmScore++;
+if(g.aSP.fip<(g.hSP?g.hSP.fip:4.5))mmScore++;
+pitchers.push({name:g.aSP.name||'TBD',team:g.aI.a,opp:g.hI.a,era:g.aSP.era||4.50,whip:g.aSP.whip||1.30,k9:g.aSP.k9||7.0,predK:predK,predH:predH,predER:predER,mmScore:mmScore,gs:gs});
+}
+if(g.hD&&g.hD.hit){
+var oppEra=g.aSP?g.aSP.era:4.50;
+hitters.push({team:g.hI.a,opp:g.aI.a,oppSP:g.aSP?g.aSP.name||'TBD':'TBD',avg:g.hD.hit.avg||0.250,ops:g.hD.hit.ops||0.720,hr:g.hD.hit.hr||0,oppEra:oppEra,boost:oppEra>4.5?1.1:(oppEra>3.5?1.0:0.9),score:(g.hD.hit.ops||0.720)*(oppEra>4.5?1.1:(oppEra>3.5?1.0:0.9))});
+}
+if(g.aD&&g.aD.hit){
+var oppEra=g.hSP?g.hSP.era:4.50;
+hitters.push({team:g.aI.a,opp:g.hI.a,oppSP:g.hSP?g.hSP.name||'TBD':'TBD',avg:g.aD.hit.avg||0.250,ops:g.aD.hit.ops||0.720,hr:g.aD.hit.hr||0,oppEra:oppEra,boost:oppEra>4.5?1.1:(oppEra>3.5?1.0:0.9),score:(g.aD.hit.ops||0.720)*(oppEra>4.5?1.1:(oppEra>3.5?1.0:0.9))});
+}
 });
-h+='</div>';
+pitchers.sort(function(a,b){return b.mmScore-a.mmScore||a.era-b.era;});
+hitters.sort(function(a,b){return b.score-a.score;});
+var h='<div class="wrap">';
+h+='<div style="text-align:center;font-size:16px;font-weight:900;color:#89CFF0;margin:10px 0">Pitcher Props</div>';
+h+='<div style="text-align:center;font-size:9px;color:#888;margin-bottom:8px">Ranked by mismatch advantage | '+pitchers.length+' pitchers</div>';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#89CFF0;font-weight:800;border-bottom:1px solid rgba(137,207,240,.15);font-size:10px">';
+h+='<td style="padding:4px">Pitcher</td><td>Team</td><td>vs</td><td>ERA</td><td>WHIP</td><td>K/9</td>';
+h+='<td style="color:#66bb6a">Pred K</td><td style="color:#ffd54f">Pred H</td><td style="color:#ef5350">Pred ER</td><td>Edge</td></tr>';
+pitchers.forEach(function(p,i){
+var edgeLbl=p.mmScore>=3?'Strong':(p.mmScore>=2?'Lean':'Weak');
+var edgeClr=p.mmScore>=3?'#66bb6a':(p.mmScore>=2?'#ffd54f':'#ef5350');
+var bg=i%2===0?'rgba(137,207,240,.02)':'transparent';
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.04);background:'+bg+'">';
+h+='<td style="padding:4px;font-weight:700">'+p.name+'</td>';
+h+='<td>'+p.team+'</td>';
+h+='<td style="color:#888">'+p.opp+'</td>';
+h+='<td>'+p.era.toFixed(2)+'</td>';
+h+='<td>'+p.whip.toFixed(2)+'</td>';
+h+='<td>'+p.k9.toFixed(1)+'</td>';
+h+='<td style="color:#66bb6a;font-weight:800">'+p.predK.toFixed(1)+'</td>';
+h+='<td style="color:#ffd54f;font-weight:800">'+p.predH.toFixed(1)+'</td>';
+h+='<td style="color:#ef5350;font-weight:800">'+p.predER.toFixed(1)+'</td>';
+h+='<td style="color:'+edgeClr+';font-weight:800">'+edgeLbl+'</td>';
+h+='</tr>';
 });
-h+='</div>';
+h+='</table>';
+h+='<div style="text-align:center;font-size:16px;font-weight:900;color:#89CFF0;margin:16px 0 4px">Top Hitters</div>';
+h+='<div style="text-align:center;font-size:9px;color:#888;margin-bottom:8px">Ranked by OPS vs opposing pitcher | '+hitters.length+' lineups</div>';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#89CFF0;font-weight:800;border-bottom:1px solid rgba(137,207,240,.15);font-size:10px">';
+h+='<td style="padding:4px">Team</td><td>vs</td><td>Opp SP</td><td>Opp ERA</td><td>AVG</td><td>OPS</td><td>HR</td><td>Matchup</td></tr>';
+hitters.forEach(function(ht,i){
+var matchLbl=ht.boost>=1.1?'Favorable':(ht.boost>=1.0?'Neutral':'Tough');
+var matchClr=ht.boost>=1.1?'#66bb6a':(ht.boost>=1.0?'#ffd54f':'#ef5350');
+var bg=i%2===0?'rgba(137,207,240,.02)':'transparent';
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.04);background:'+bg+'">';
+h+='<td style="padding:4px;font-weight:700">'+ht.team+'</td>';
+h+='<td style="color:#888">'+ht.opp+'</td>';
+h+='<td>'+ht.oppSP+'</td>';
+h+='<td>'+ht.oppEra.toFixed(2)+'</td>';
+h+='<td>'+ht.avg.toFixed(3)+'</td>';
+h+='<td style="font-weight:700">'+ht.ops.toFixed(3)+'</td>';
+h+='<td>'+ht.hr+'</td>';
+h+='<td style="color:'+matchClr+';font-weight:800">'+matchLbl+'</td>';
+h+='</tr>';
+});
+h+='</table></div>';
 el.innerHTML=h;
-el.querySelectorAll('[data-propbet]').forEach(function(btn){
-btn.addEventListener('click',function(){
-var pts=this.getAttribute('data-propbet').split('|');
-parlayPicks.push({gpk:'prop',type:pts[1],pick:pts[0]+' '+pts[2],odds:pts[3]});
-updateParlaySlip();
-this.textContent='Added!';
-this.disabled=true;
-});
-});
-});
 }
+
+
 
 /* ===== PlutoLil Picks v9.3 — Part 6: MLB Game Loop ===== */
 
@@ -1518,6 +1517,7 @@ bestBets=cardData.filter(function(g){return g.pred.conf>0.2;}).sort(function(a,b
 
 var h=renderSortBar();
 cardData.forEach(function(g){
+window._plpCardData=cardData;
 var hPct=pct(g.pred.hp),aPct=pct(g.pred.ap);
 var cLvl=g.pred.conf>0.3?'hi':(g.pred.conf>0.15?'md':'lo');
 var isFav=Favs.has(g.gpk);
