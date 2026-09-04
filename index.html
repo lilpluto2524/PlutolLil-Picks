@@ -1364,6 +1364,40 @@ this.disabled=true;
 
 /* ===== PlutoLil Picks v9.3 — Part 6: MLB Game Loop ===== */
 
+function renderMismatchChart(hSP,aSP,hTeam,aTeam){
+if(!hSP&&!aSP)return'<div style="color:#888;font-size:10px;padding:4px">Starting pitcher data not available</div>';
+var hE=hSP?hSP.era:4.50,aE=aSP?aSP.era:4.50;
+var hW=hSP?hSP.whip:1.30,aW=aSP?aSP.whip:1.30;
+var hK=hSP?hSP.k9:7.0,aK=aSP?aSP.k9:7.0;
+var hI=hSP?hSP.ip:80,aI=aSP?aSP.ip:80;
+var hF=hSP?hSP.fip:4.50,aF=aSP?aSP.fip:4.50;
+var hB=hSP?hSP.bb9:3.0,aB=aSP?aSP.bb9:3.0;
+var cats=[{name:'ERA',hVal:hE,aVal:aE,lower:true,max:7},{name:'WHIP',hVal:hW,aVal:aW,lower:true,max:2},{name:'K/9',hVal:hK,aVal:aK,lower:false,max:14},{name:'IP',hVal:hI,aVal:aI,lower:false,max:200},{name:'FIP',hVal:hF,aVal:aF,lower:true,max:7},{name:'BB/9',hVal:hB,aVal:aB,lower:true,max:6}];
+var hScore=0,aScore=0;
+cats.forEach(function(c){if(c.lower){if(c.hVal<c.aVal)hScore++;else if(c.aVal<c.hVal)aScore++;}else{if(c.hVal>c.aVal)hScore++;else if(c.aVal>c.hVal)aScore++;}});
+var edge=hScore>aScore?hTeam:(aScore>hScore?aTeam:'Even');
+var edgeClr=hScore>aScore?'#66bb6a':(aScore>hScore?'#ef5350':'#ffd54f');
+var h='<div style="text-align:center;margin-bottom:6px"><span style="font-size:10px;font-weight:800;color:'+edgeClr+'">Pitching Edge: '+edge+' ('+hScore+'-'+aScore+')</span></div>';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#89CFF0;font-weight:800;border-bottom:1px solid rgba(137,207,240,.1)"><td style="padding:2px 4px;text-align:center">'+hTeam+'</td><td style="text-align:center">Stat</td><td style="text-align:center">'+aTeam+'</td><td style="text-align:center">Chart</td></tr>';
+cats.forEach(function(c){var hWin=c.lower?(c.hVal<=c.aVal):(c.hVal>=c.aVal);var aWin=!hWin;if(c.hVal===c.aVal){hWin=false;aWin=false;}var hClr=hWin?'#66bb6a':'#e0e0e0';var aClr=aWin?'#66bb6a':'#e0e0e0';var hPct=Math.min(Math.max((c.hVal/c.max)*100,5),95);var aPct=Math.min(Math.max((c.aVal/c.max)*100,5),95);if(c.lower){hPct=100-hPct;aPct=100-aPct;}h+='<tr style="border-bottom:1px solid rgba(137,207,240,.04)"><td style="padding:3px 4px;text-align:center;font-weight:700;color:'+hClr+'">'+c.hVal.toFixed(2)+'</td><td style="text-align:center;color:#89CFF0;font-weight:700">'+c.name+'</td><td style="text-align:center;font-weight:700;color:'+aClr+'">'+c.aVal.toFixed(2)+'</td><td style="width:40%"><div style="display:flex;gap:2px;align-items:center"><div style="width:'+hPct+'%;height:8px;background:'+hClr+';border-radius:3px 0 0 3px;transition:width 0.5s"></div><div style="width:'+aPct+'%;height:8px;background:'+aClr+';border-radius:0 3px 3px 0;transition:width 0.5s"></div></div></td></tr>';});
+h+='</table>';
+return h;
+}
+function renderPitcherProps(hSP,aSP,hTeam,aTeam,hD,aD){
+if(!hSP&&!aSP)return'<div style="color:#888;font-size:10px;padding:4px">Pitcher prop data not available</div>';
+function projK(sp,oppD){if(!sp)return{val:5.0,conf:'Low'};var k9=sp.k9||7.0;var ip=sp.ip||80;var avgIP=ip/(sp.gs||15);var oppK=oppD&&oppD.hit?(1-(oppD.hit.avg||0.250))*1.2:1.0;var predK=((k9/9)*avgIP)*oppK;predK=Math.max(2,Math.min(14,predK));var conf=sp.gs>=10?'High':(sp.gs>=5?'Med':'Low');return{val:predK,conf:conf};}
+function projHits(sp,oppD){if(!sp)return{val:6.0,conf:'Low'};var whip=sp.whip||1.30;var ip=sp.ip||80;var avgIP=ip/(sp.gs||15);var bb9=sp.bb9||3.0;var hPer9=((whip*9)-bb9);var predH=(hPer9/9)*avgIP;var oppAvg=oppD&&oppD.hit?oppD.hit.avg||0.250:0.250;predH=predH*(oppAvg/0.250);predH=Math.max(2,Math.min(12,predH));var conf=sp.gs>=10?'High':(sp.gs>=5?'Med':'Low');return{val:predH,conf:conf};}
+function projER(sp,oppD){if(!sp)return{val:3.0,conf:'Low'};var era=sp.era||4.50;var ip=sp.ip||80;var avgIP=ip/(sp.gs||15);var predER=(era/9)*avgIP;var oppOps=oppD&&oppD.hit?oppD.hit.ops||0.720:0.720;predER=predER*(oppOps/0.720);predER=Math.max(0,Math.min(8,predER));var conf=sp.gs>=10?'High':(sp.gs>=5?'Med':'Low');return{val:predER,conf:conf};}
+var hK=projK(hSP,aD),aK=projK(aSP,hD);var hH=projHits(hSP,aD),aH=projHits(aSP,hD);var hER=projER(hSP,aD),aER=projER(aSP,hD);
+function confClr(c){return c==='High'?'#66bb6a':(c==='Med'?'#ffd54f':'#ef5350');}
+function propRow(label,hVal,hConf,aVal,aConf,lower){var hBetter=lower?(hVal<=aVal):(hVal>=aVal);var aBetter=!hBetter;if(hVal===aVal){hBetter=false;aBetter=false;}var hClr=hBetter?'#66bb6a':'#e0e0e0';var aClr=aBetter?'#66bb6a':'#e0e0e0';var r='<tr style="border-bottom:1px solid rgba(137,207,240,.04)"><td style="padding:4px;text-align:center;font-weight:800;color:'+hClr+'">'+hVal.toFixed(1)+'</td><td style="text-align:center;font-size:8px;color:'+confClr(hConf)+'">'+hConf+'</td><td style="text-align:center;color:#89CFF0;font-weight:700;font-size:10px">'+label+'</td><td style="text-align:center;font-size:8px;color:'+confClr(aConf)+'">'+aConf+'</td><td style="padding:4px;text-align:center;font-weight:800;color:'+aClr+'">'+aVal.toFixed(1)+'</td></tr>';return r;}
+var h='<div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(137,207,240,.08)"><div style="text-align:center;font-size:10px;font-weight:800;color:#89CFF0;margin-bottom:6px">Pitcher Prop Predictions</div>';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0"><tr style="color:#89CFF0;font-weight:800;border-bottom:1px solid rgba(137,207,240,.1)"><td style="text-align:center;padding:2px 4px">'+hTeam+'</td><td style="text-align:center;font-size:8px">Conf</td><td style="text-align:center">Prop</td><td style="text-align:center;font-size:8px">Conf</td><td style="text-align:center;padding:2px 4px">'+aTeam+'</td></tr>';
+h+=propRow('PRED K',hK.val,hK.conf,aK.val,aK.conf,false);h+=propRow('PRED HITS',hH.val,hH.conf,aH.val,aH.conf,true);h+=propRow('PRED ER',hER.val,hER.conf,aER.val,aER.conf,true);
+h+='</table><div style="text-align:center;font-size:8px;color:#888;margin-top:4px">Green = better projection | Conf based on games started</div></div>';
+return h;
+}
 async function loadGames(){
 var el=document.getElementById('tp-gm');
 el.innerHTML='<div class="ld"><div class="spin"></div><br>Loading MLB games...</div>';
@@ -1556,7 +1590,7 @@ h+='<button class="qbet-btn" data-bet="'+g.gpk+'|O/U|'+g.bl.ouPk+' '+g.bl.ouLine
 h+='<button class="qbet-btn" data-bet="'+g.gpk+'|FI|'+g.fi.pick+'|'+fmtML(-110)+'">Bet '+g.fi.pick+'</button>';
 h+='</div>';
 
-h+='<div style="margin-top:4px"><button class="xb" data-toggle="det-'+g.gpk+'">Details</button> <button class="xb" data-toggle="note-'+g.gpk+'">Notes</button></div>';
+h+='<div style="margin-top:4px"><button class="xb" data-toggle="det-'+g.gpk+'">Details</button> <button class="xb" data-toggle="note-'+g.gpk+'">Notes</button> <button class="xb" data-toggle="lu-'+g.gpk+'">Lineups</button> <button class="xb" data-toggle="bvp-'+g.gpk+'">BvP Splits</button> <button class="xb" data-toggle="bp-'+g.gpk+'">Batter Props</button> <button class="xb" data-toggle="mm-'+g.gpk+'">Pitcher Mismatch</button></div>';
 h+='<div class="collapsible" id="det-'+g.gpk+'">';
 h+='<div style="font-size:9px;color:#888">';
 var fKeys=Object.keys(g.pred.f);
@@ -1565,6 +1599,10 @@ var v=g.pred.f[k];
 h+='<span class="fc '+(v>0?'pos':(v<0?'neg':'neu'))+'">'+k+': '+(v>0?'+':'')+v.toFixed(3)+'</span> ';
 });
 h+='</div></div>';
+h+='<div class="collapsible" id="lu-'+g.gpk+'"><div style="display:flex;gap:8px"><div style="flex:1"><div style="font-size:9px;color:#89CFF0;font-weight:700;margin-bottom:4px">'+g.hI.a+' Lineup</div><div id="lu-h-'+g.gpk+'"><div class="ld"><div class="spin"></div> Loading...</div></div></div><div style="flex:1"><div style="font-size:9px;color:#89CFF0;font-weight:700;margin-bottom:4px">'+g.aI.a+' Lineup</div><div id="lu-a-'+g.gpk+'"><div class="ld"><div class="spin"></div> Loading...</div></div></div></div></div>';
+h+='<div class="collapsible" id="bvp-'+g.gpk+'"><div style="display:flex;gap:8px"><div style="flex:1"><div style="font-size:9px;color:#89CFF0;font-weight:700;margin-bottom:4px">'+g.hI.a+' vs '+spLine(g.aSP)+'</div><div id="bvp-h-'+g.gpk+'"><div class="ld"><div class="spin"></div> Loading...</div></div></div><div style="flex:1"><div style="font-size:9px;color:#89CFF0;font-weight:700;margin-bottom:4px">'+g.aI.a+' vs '+spLine(g.hSP)+'</div><div id="bvp-a-'+g.gpk+'"><div class="ld"><div class="spin"></div> Loading...</div></div></div></div></div>';
+h+='<div class="collapsible" id="mm-'+g.gpk+'">'+renderMismatchChart(g.hSP,g.aSP,g.hI.a,g.aI.a)+renderPitcherProps(g.hSP,g.aSP,g.hI.a,g.aI.a,g.hD,g.aD)+'</div>';
+h+='<div class="collapsible" id="bp-'+g.gpk+'"><div style="display:flex;gap:8px"><div style="flex:1"><div id="bp-h-'+g.gpk+'"><div class="ld"><div class="spin"></div> Loading...</div></div></div><div style="flex:1"><div id="bp-a-'+g.gpk+'"><div class="ld"><div class="spin"></div> Loading...</div></div></div></div></div>';
 h+='<div class="collapsible" id="note-'+g.gpk+'"><textarea style="width:100%;height:50px;background:rgba(137,207,240,.05);border:1px solid rgba(137,207,240,.1);border-radius:4px;color:#e0e0e0;padding:4px;font-size:10px;resize:vertical" data-note-gpk="'+g.gpk+'" placeholder="Add your notes...">'+GameNotes.get(g.gpk)+'</textarea></div>';
 h+='</div>';
 });
@@ -1594,7 +1632,36 @@ this.disabled=true;
 el.querySelectorAll('[data-toggle]').forEach(function(btn){
 btn.addEventListener('click',function(){
 var tgt=document.getElementById(this.getAttribute('data-toggle'));
-if(tgt)tgt.classList.toggle('open');
+if(tgt){
+tgt.classList.toggle('open');
+if(tgt.id.startsWith('lu-')&&tgt.classList.contains('open')&&tgt.querySelector('.ld')){
+var gpk=tgt.id.replace('lu-','');
+fetchLineup(gpk).then(function(lu){
+var hEl=document.getElementById('lu-h-'+gpk);
+var aEl=document.getElementById('lu-a-'+gpk);
+if(hEl)hEl.innerHTML=renderLineupTable(lu.home);
+if(aEl)aEl.innerHTML=renderLineupTable(lu.away);
+});
+}
+if(tgt.id.startsWith('bvp-')&&tgt.classList.contains('open')&&tgt.querySelector('.ld')){
+var gpk=tgt.id.replace('bvp-','');
+fetchLineup(gpk).then(function(lu){
+var hEl=document.getElementById('bvp-h-'+gpk);
+var aEl=document.getElementById('bvp-a-'+gpk);
+if(hEl)hEl.innerHTML=renderBvP(lu.home,'Opposing SP');
+if(aEl)aEl.innerHTML=renderBvP(lu.away,'Opposing SP');
+});
+}
+if(tgt.id.startsWith('bp-')&&tgt.classList.contains('open')&&tgt.querySelector('.ld')){
+var gpk=tgt.id.replace('bp-','');
+fetchLineup(gpk).then(function(lu){
+var hEl=document.getElementById('bp-h-'+gpk);
+var aEl=document.getElementById('bp-a-'+gpk);
+if(hEl)hEl.innerHTML=renderBatterProps(lu.home);
+if(aEl)aEl.innerHTML=renderBatterProps(lu.away);
+});
+}
+}
 });
 });
 el.querySelectorAll('[data-fav-gpk]').forEach(function(btn){
@@ -2521,6 +2588,154 @@ function plpShare(gpk){
 var d=window._plpShareData[gpk];
 if(d)generatePickCard(d);
 }
+
+/* --- Lineups, BvP Splits, Batter Props --- */
+async function fetchLineup(gpk){
+try{
+var gid=gpk.replace('mlb_','');
+var d=await gfetch('https://statsapi.mlb.com/api/v1.1/game/'+gid+'/feed/live');
+var home=[],away=[];
+if(d.liveData&&d.liveData.boxscore){
+var hB=d.liveData.boxscore.teams.home;
+var aB=d.liveData.boxscore.teams.away;
+if(hB.battingOrder)hB.battingOrder.forEach(function(id){
+var p=hB.players['ID'+id];
+if(p)home.push({name:p.person.fullName,pos:p.position.abbreviation,avg:p.seasonStats&&p.seasonStats.batting?p.seasonStats.batting.avg:'--',hr:p.seasonStats&&p.seasonStats.batting?p.seasonStats.batting.homeRuns:'--',rbi:p.seasonStats&&p.seasonStats.batting?p.seasonStats.batting.rbi:'--',ops:p.seasonStats&&p.seasonStats.batting?p.seasonStats.batting.ops:'--'});
+});
+if(aB.battingOrder)aB.battingOrder.forEach(function(id){
+var p=aB.players['ID'+id];
+if(p)away.push({name:p.person.fullName,pos:p.position.abbreviation,avg:p.seasonStats&&p.seasonStats.batting?p.seasonStats.batting.avg:'--',hr:p.seasonStats&&p.seasonStats.batting?p.seasonStats.batting.homeRuns:'--',rbi:p.seasonStats&&p.seasonStats.batting?p.seasonStats.batting.rbi:'--',ops:p.seasonStats&&p.seasonStats.batting?p.seasonStats.batting.ops:'--'});
+});
+}
+return{home:home,away:away};
+}catch(e){return{home:[],away:[]};}
+}
+
+function renderLineupTable(players,teamAbbr){
+if(!players||players.length===0)return'<div style="color:#888;font-size:10px;padding:4px">Lineup not yet available</div>';
+var h='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#89CFF0;font-weight:800;border-bottom:1px solid rgba(137,207,240,.1)"><td style="padding:2px 4px">#</td><td>Player</td><td>Pos</td><td>AVG</td><td>HR</td><td>RBI</td><td>OPS</td></tr>';
+players.forEach(function(p,i){
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.04)"><td style="padding:2px 4px;color:#888">'+(i+1)+'</td><td style="font-weight:700">'+p.name+'</td><td style="color:#888">'+p.pos+'</td><td>'+p.avg+'</td><td>'+p.hr+'</td><td>'+p.rbi+'</td><td>'+p.ops+'</td></tr>';
+});
+h+='</table>';
+return h;
+}
+
+/* --- Pitcher Prop Predictions --- */
+function renderPitcherProps(hSP,aSP,hTeam,aTeam,hD,aD){
+if(!hSP&&!aSP)return'<div style="color:#888;font-size:10px;padding:4px">Pitcher prop data not available</div>';
+function projK(sp,oppD){
+if(!sp)return{val:5.0,conf:'Low'};
+var k9=sp.k9||7.0;
+var ip=sp.ip||80;
+var avgIP=ip/(sp.gs||15);
+var oppK=oppD&&oppD.hit?(1-(oppD.hit.avg||0.250))*1.2:1.0;
+var predK=((k9/9)*avgIP)*oppK;
+predK=Math.max(2,Math.min(14,predK));
+var conf=sp.gs>=10?'High':(sp.gs>=5?'Med':'Low');
+return{val:predK,conf:conf};
+}
+function projHits(sp,oppD){
+if(!sp)return{val:6.0,conf:'Low'};
+var whip=sp.whip||1.30;
+var ip=sp.ip||80;
+var avgIP=ip/(sp.gs||15);
+var bb9=sp.bb9||3.0;
+var hPer9=((whip*9)-bb9);
+var predH=(hPer9/9)*avgIP;
+var oppAvg=oppD&&oppD.hit?oppD.hit.avg||0.250:0.250;
+predH=predH*(oppAvg/0.250);
+predH=Math.max(2,Math.min(12,predH));
+var conf=sp.gs>=10?'High':(sp.gs>=5?'Med':'Low');
+return{val:predH,conf:conf};
+}
+function projER(sp,oppD){
+if(!sp)return{val:3.0,conf:'Low'};
+var era=sp.era||4.50;
+var ip=sp.ip||80;
+var avgIP=ip/(sp.gs||15);
+var predER=(era/9)*avgIP;
+var oppOps=oppD&&oppD.hit?oppD.hit.ops||0.720:0.720;
+predER=predER*(oppOps/0.720);
+predER=Math.max(0,Math.min(8,predER));
+var conf=sp.gs>=10?'High':(sp.gs>=5?'Med':'Low');
+return{val:predER,conf:conf};
+}
+var hK=projK(hSP,aD),aK=projK(aSP,hD);
+var hH=projHits(hSP,aD),aH=projHits(aSP,hD);
+var hER=projER(hSP,aD),aER=projER(aSP,hD);
+function confClr(c){return c==='High'?'#66bb6a':(c==='Med'?'#ffd54f':'#ef5350');}
+function propRow(label,hVal,hConf,aVal,aConf,lower){
+var hBetter=lower?(hVal<=aVal):(hVal>=aVal);
+var aBetter=!hBetter;
+if(hVal===aVal){hBetter=false;aBetter=false;}
+var hClr=hBetter?'#66bb6a':'#e0e0e0';
+var aClr=aBetter?'#66bb6a':'#e0e0e0';
+var r='<tr style="border-bottom:1px solid rgba(137,207,240,.04)">';
+r+='<td style="padding:4px;text-align:center;font-weight:800;color:'+hClr+'">'+hVal.toFixed(1)+'</td>';
+r+='<td style="text-align:center;font-size:8px;color:'+confClr(hConf)+'">'+hConf+'</td>';
+r+='<td style="text-align:center;color:#89CFF0;font-weight:700;font-size:10px">'+label+'</td>';
+r+='<td style="text-align:center;font-size:8px;color:'+confClr(aConf)+'">'+aConf+'</td>';
+r+='<td style="padding:4px;text-align:center;font-weight:800;color:'+aClr+'">'+aVal.toFixed(1)+'</td>';
+r+='</tr>';
+return r;
+}
+var h='<div style="margin-top:8px;padding-top:6px;border-top:1px solid rgba(137,207,240,.08)">';
+h+='<div style="text-align:center;font-size:10px;font-weight:800;color:#89CFF0;margin-bottom:6px">Pitcher Prop Predictions</div>';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#89CFF0;font-weight:800;border-bottom:1px solid rgba(137,207,240,.1)">';
+h+='<td style="text-align:center;padding:2px 4px">'+hTeam+'</td>';
+h+='<td style="text-align:center;font-size:8px">Conf</td>';
+h+='<td style="text-align:center">Prop</td>';
+h+='<td style="text-align:center;font-size:8px">Conf</td>';
+h+='<td style="text-align:center;padding:2px 4px">'+aTeam+'</td>';
+h+='</tr>';
+h+=propRow('PRED K',hK.val,hK.conf,aK.val,aK.conf,false);
+h+=propRow('PRED HITS',hH.val,hH.conf,aH.val,aH.conf,true);
+h+=propRow('PRED ER',hER.val,hER.conf,aER.val,aER.conf,true);
+h+='</table>';
+h+='<div style="text-align:center;font-size:8px;color:#888;margin-top:4px">Green = better projection | Conf based on games started</div>';
+h+='</div>';
+return h;
+}
+
+
+
+function renderBvP(players,spName){
+if(!players||players.length===0||!spName)return'<div style="color:#888;font-size:10px;padding:4px">BvP data not available</div>';
+var h='<div style="font-size:9px;color:#89CFF0;font-weight:700;margin-bottom:4px">vs '+spName+'</div>';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#89CFF0;font-weight:800;border-bottom:1px solid rgba(137,207,240,.1)"><td style="padding:2px 4px">Batter</td><td>AVG</td><td>OPS</td><td>HR</td><td>Edge</td></tr>';
+players.forEach(function(p){
+var avg=parseFloat(p.avg)||0.250;
+var edge=avg>0.300?'Hot':(avg<0.200?'Cold':'Neutral');
+var edgeClr=avg>0.300?'#66bb6a':(avg<0.200?'#ef5350':'#888');
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.04)"><td style="padding:2px 4px;font-weight:700">'+p.name+'</td><td>'+p.avg+'</td><td>'+p.ops+'</td><td>'+p.hr+'</td><td style="color:'+edgeClr+';font-weight:700">'+edge+'</td></tr>';
+});
+h+='</table>';
+return h;
+}
+
+function renderBatterProps(players){
+if(!players||players.length===0)return'<div style="color:#888;font-size:10px;padding:4px">Props not available</div>';
+var h='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#89CFF0;font-weight:800;border-bottom:1px solid rgba(137,207,240,.1)"><td style="padding:2px 4px">Batter</td><td>AVG</td><td>OPS</td><td>HR</td><td>Hit Proj</td><td>HR Proj</td></tr>';
+players.forEach(function(p){
+var avg=parseFloat(p.avg)||0.250;
+var ops=parseFloat(p.ops)||0.700;
+var hitProj=avg>=0.280?'Yes':(avg>=0.250?'Maybe':'No');
+var hitClr=avg>=0.280?'#66bb6a':(avg>=0.250?'#ffd54f':'#ef5350');
+var hrRate=parseInt(p.hr)||0;
+var hrProj=hrRate>=25?'Yes':(hrRate>=15?'Maybe':'No');
+var hrClr=hrRate>=25?'#66bb6a':(hrRate>=15?'#ffd54f':'#ef5350');
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.04)"><td style="padding:2px 4px;font-weight:700">'+p.name+'</td><td>'+p.avg+'</td><td>'+p.ops+'</td><td>'+p.hr+'</td><td style="color:'+hitClr+';font-weight:700">'+hitProj+'</td><td style="color:'+hrClr+';font-weight:700">'+hrProj+'</td></tr>';
+});
+h+='</table>';
+return h;
+}
+
+
 </script>
 </body>
 </html>
