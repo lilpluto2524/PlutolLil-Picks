@@ -586,9 +586,10 @@ return'<div class="sort-bar"><button class="sort-btn active" data-sort="time">By
 /* --- NFL Week Navigation --- */
 function renderNFLWeekNav(){
 var dn=document.getElementById('date-nav');
-dn.innerHTML='<button class="dn-btn" id="nfl-prev">Prev Week</button><div class="dl">NFL Week '+NFL_WEEK+'</div><button class="dn-btn" id="nfl-next">Next Week</button>';
+dn.innerHTML='<button class="dn-btn" id="nfl-prev">Prev Week</button><div class="dl">NFL Week '+NFL_WEEK+'</div><button class="dn-btn" id="nfl-next">Next Week</button><button class="dn-btn" id="nfl-standings-btn" style="margin-left:8px;background:rgba(137,207,240,.15);color:#89CFF0">Standings</button>';
 document.getElementById('nfl-prev').addEventListener('click',function(){if(NFL_WEEK>1){NFL_WEEK--;fetchCache={};loadNFLGames();}});
 document.getElementById('nfl-next').addEventListener('click',function(){if(NFL_WEEK<18){NFL_WEEK++;fetchCache={};loadNFLGames();}});
+document.getElementById('nfl-standings-btn').addEventListener('click',function(){renderNFLStandingsTab();});
 }
 
 /* ===== PlutoLil Picks v9.3 — Part 3: MLB Prediction Engine ===== */
@@ -1243,6 +1244,7 @@ el.innerHTML='<div class="digest-stat"><div class="ds-val">'+nTotal+'</div><div 
 function renderPropsTab(){
 var el=document.getElementById('tp-pp');
 if(!el)return;
+if(SPORT==='nfl'){renderNFLPropsTab();return;}
 var games=window._plpGameCache||[];
 if(games.length===0){
 el.innerHTML='<div class="no-data">No games loaded yet. Switch to Games tab first.</div>';
@@ -1800,7 +1802,6 @@ else if((hWp>0.55&&aWp<0.4)||(aWp>0.55&&hWp<0.4))impBadge='<span class="importan
 
 var cardGlowClass='';if(trkEntry&&trkEntry.w===true)cardGlowClass=' glow-win';else if(trkEntry&&trkEntry.w===false)cardGlowClass=' glow-loss';
 h+='<div class="gc'+cardGlowClass+'" data-gpk="'+g.gpk+'" data-conf="'+g.pred.conf+'" data-fav="'+(isFav?1:0)+'">';
-h+='<div class="gc" style="'+cardGlow+'" data-gpk="'+g.gpk+'" data-conf="'+g.pred.conf+'" data-fav="'+(isFav?1:0)+'">';
 h+=resultBadge;
 h+='<button class="fav-star '+(isFav?'on':'')+'" data-fav-gpk="'+g.gpk+'">'+(isFav?'&#9733;':'&#9734;')+'</button>';
 
@@ -2735,6 +2736,411 @@ h+='</table>';
 return h;
 }
 
+
+/* ===== NFL STANDINGS + RECORDS ===== */
+var NFLStandings={cache:null,ts:0};
+
+async function fetchNFLStandings(){
+if(NFLStandings.cache&&Date.now()-NFLStandings.ts<600000)return NFLStandings.cache;
+try{
+var teams={};
+var weeks=[1,2,3,4,5];
+var res=await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week='+NFL_WEEK);
+var data=await res.json();
+if(data.events){
+data.events.forEach(function(ev){
+if(!ev.competitions||!ev.competitions[0])return;
+ev.competitions[0].competitors.forEach(function(c){
+var tm=c.team||{};
+var abbr=tm.abbreviation||'';
+if(teams[abbr])return;
+var rec='0-0';
+var home='0-0';
+var away='0-0';
+var confRec='0-0';
+var divRec='0-0';
+if(c.records){
+c.records.forEach(function(r){
+if(r.name==='overall'||r.type==='total')rec=r.summary||rec;
+if(r.name==='Home'||r.type==='home')home=r.summary||home;
+if(r.name==='Road'||r.type==='road')away=r.summary||away;
+if(r.name==='vsConf'||r.type==='vsconf')confRec=r.summary||confRec;
+if(r.name==='vsDiv'||r.type==='vsdiv')divRec=r.summary||divRec;
+});
+}
+var rp=rec.split('-');
+var w=parseInt(rp[0])||0;
+var l=parseInt(rp[1])||0;
+var t=parseInt(rp[2])||0;
+teams[abbr]={
+id:tm.id||'',
+abbr:abbr,
+name:tm.displayName||tm.name||'',
+logo:tm.logo||'https://a.espncdn.com/i/teamlogos/nfl/500/'+abbr.toLowerCase()+'.png',
+conf:'',
+div:'',
+w:w,l:l,t:t,
+pct:((w+l+t)>0?(w/(w+l+t)).toFixed(3):'.000'),
+pf:0,pa:0,diff:0,
+streak:'-',
+home:home,
+away:away,
+divRec:divRec,
+confRec:confRec,
+l5:'-'
+};
+});
+});
+}
+NFLStandings.cache=teams;
+NFLStandings.ts=Date.now();
+return teams;
+}catch(e){console.log('NFL standings error:',e);return{};}
+}
+
+
+
+function renderNFLStandingsTab(){
+var gm=document.getElementById('tp-gm');
+if(!gm)return;
+var existing=document.getElementById('nfl-standings-section');
+if(existing){existing.style.display=existing.style.display==='none'?'block':'none';return;}
+var section=document.createElement('div');
+section.id='nfl-standings-section';
+section.style.cssText='margin-top:12px;';
+section.innerHTML='<div class="ld"><div class="spin"></div> Loading standings...</div>';
+gm.appendChild(section);
+fetchNFLStandings().then(function(teams){
+var teamArr=Object.values(teams);
+if(teamArr.length===0){
+section.innerHTML='<div class="no-data">NFL standings not available yet.</div>';
+return;
+}
+var nflDivMap={ARI:'NFC West',ATL:'NFC South',BAL:'AFC North',BUF:'AFC East',CAR:'NFC South',CHI:'NFC North',CIN:'AFC North',CLE:'AFC North',DAL:'NFC East',DEN:'AFC West',DET:'NFC North',GB:'NFC North',HOU:'AFC South',IND:'AFC South',JAX:'AFC South',KC:'AFC West',LV:'AFC West',LAC:'AFC West',LAR:'NFC West',MIA:'AFC East',MIN:'NFC North',NE:'AFC East',NO:'NFC South',NYG:'NFC East',NYJ:'AFC East',PHI:'NFC East',PIT:'AFC North',SF:'NFC West',SEA:'NFC West',TB:'NFC South',TEN:'AFC South',WSH:'NFC East'};
+var byDiv={};
+teamArr.forEach(function(t){
+var full=nflDivMap[t.abbr]||'Unknown';
+t.conf=full.substring(0,3);
+t.div=full;
+var key=full;
+if(!byDiv[key])byDiv[key]={conf:t.conf,div:t.div,teams:[]};
+byDiv[key].teams.push(t);
+});
+Object.keys(byDiv).forEach(function(k){
+byDiv[k].teams.sort(function(a,b){return b.w-a.w||parseFloat(b.pct)-parseFloat(a.pct)||b.diff-a.diff;});
+});
+var h='<div style="text-align:center;font-size:16px;font-weight:900;color:#89CFF0;margin:10px 0">NFL Standings</div>';
+var confs=['AFC','NFC'];
+confs.forEach(function(conf){
+h+='<div style="text-align:center;font-size:13px;font-weight:800;color:#ffd54f;margin:10px 0 4px">'+conf+'</div>';
+Object.keys(byDiv).sort().forEach(function(k){
+if(byDiv[k].conf!==conf)return;
+var d=byDiv[k];
+h+='<div style="margin-bottom:10px">';
+h+='<div style="font-size:10px;font-weight:800;color:#89CFF0;padding:3px 6px;background:rgba(137,207,240,.05);border-radius:4px 4px 0 0">'+d.div+'</div>';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#89CFF0;font-weight:700;border-bottom:1px solid rgba(137,207,240,.1)">';
+h+='<td style="padding:3px">Team</td><td>W</td><td>L</td><td>PCT</td><td>HOME</td><td>AWAY</td><td>DIV</td><td>CONF</td></tr>';
+d.teams.forEach(function(t,i){
+var bg=i%2===0?'rgba(137,207,240,.02)':'transparent';
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.04);background:'+bg+'">';
+h+='<td style="padding:3px;font-weight:700">';
+if(t.logo)h+='<img src="'+t.logo+'" style="width:14px;height:14px;vertical-align:middle;margin-right:3px">';
+h+=t.abbr+'</td>';
+h+='<td style="font-weight:700">'+t.w+'</td>';
+h+='<td>'+t.l+'</td>';
+h+='<td>'+t.pct+'</td>';
+h+='<td>'+t.home+'</td>';
+h+='<td>'+t.away+'</td>';
+h+='<td>'+t.divRec+'</td>';
+h+='<td>'+t.confRec+'</td>';
+h+='</tr>';
+});
+h+='</table></div>';
+});
+});
+section.innerHTML=h;
+});
+}
+
+
+/* ===== NFL ROSTERS + INJURIES ===== */
+var NFLRosterCache={};
+var NFLInjuryCache={};
+
+async function fetchNFLRoster(teamId){
+if(NFLRosterCache[teamId])return NFLRosterCache[teamId];
+try{
+var res=await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/'+teamId+'/roster');
+var data=await res.json();
+var roster={qb:[],rb:[],wr:[],te:[],ol:[],dl:[],lb:[],db:[],k:[],p:[]};
+if(data.athletes){
+data.athletes.forEach(function(group){
+var pos=group.position||'';
+(group.items||[]).forEach(function(player){
+var p={
+id:player.id||'',
+name:player.displayName||player.fullName||'',
+num:player.jersey||'',
+pos:player.position?player.position.abbreviation:'',
+age:player.age||'',
+exp:player.experience?player.experience.years:0,
+college:player.college?player.college.name:'',
+ht:player.displayHeight||'',
+wt:player.displayWeight||'',
+status:player.status?player.status.type:'active',
+headshot:player.headshot?player.headshot.href:''
+};
+if(p.pos==='QB')roster.qb.push(p);
+else if(p.pos==='RB'||p.pos==='FB')roster.rb.push(p);
+else if(p.pos==='WR')roster.wr.push(p);
+else if(p.pos==='TE')roster.te.push(p);
+else if(['OT','OG','C','T','G'].indexOf(p.pos)>=0)roster.ol.push(p);
+else if(['DE','DT','NT'].indexOf(p.pos)>=0)roster.dl.push(p);
+else if(['LB','OLB','ILB','MLB'].indexOf(p.pos)>=0)roster.lb.push(p);
+else if(['CB','S','FS','SS','DB'].indexOf(p.pos)>=0)roster.db.push(p);
+else if(p.pos==='K'||p.pos==='PK')roster.k.push(p);
+else if(p.pos==='P')roster.p.push(p);
+});
+});
+}
+NFLRosterCache[teamId]=roster;
+return roster;
+}catch(e){console.log('Roster error team '+teamId+':',e);return{qb:[],rb:[],wr:[],te:[],ol:[],dl:[],lb:[],db:[],k:[],p:[]};}
+}
+
+async function fetchNFLInjuries(teamId){
+if(NFLInjuryCache[teamId])return NFLInjuryCache[teamId];
+try{
+var res=await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/'+teamId+'/injuries');
+var data=await res.json();
+var injuries=[];
+if(data.team&&data.team.injuries){
+data.team.injuries.forEach(function(inj){
+injuries.push({
+name:inj.athlete?inj.athlete.displayName:'Unknown',
+pos:inj.athlete&&inj.athlete.position?inj.athlete.position.abbreviation:'',
+status:inj.status||'',
+type:inj.type?inj.type.description:'',
+detail:inj.details?inj.details.detail:'',
+side:inj.details?inj.details.side:'',
+headshot:inj.athlete&&inj.athlete.headshot?inj.athlete.headshot.href:''
+});
+});
+}
+NFLInjuryCache[teamId]=injuries;
+return injuries;
+}catch(e){
+try{
+var res2=await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/'+teamId);
+var data2=await res2.json();
+var injuries=[];
+if(data2.team&&data2.team.injuries){
+data2.team.injuries.forEach(function(inj){
+injuries.push({
+name:inj.athlete?inj.athlete.displayName:'Unknown',
+pos:inj.athlete&&inj.athlete.position?inj.athlete.position.abbreviation:'',
+status:inj.status||'',
+type:inj.type?inj.type.description:'',
+detail:inj.details?inj.details.detail:'',
+side:inj.details?inj.details.side:'',
+headshot:inj.athlete&&inj.athlete.headshot?inj.athlete.headshot.href:''
+});
+});
+}
+NFLInjuryCache[teamId]=injuries;
+return injuries;
+}catch(e2){console.log('Injury error team '+teamId+':',e2);NFLInjuryCache[teamId]=[];return[];}
+}
+}
+
+function renderNFLRosterPanel(roster,teamAbbr){
+var h='<div style="font-size:11px;font-weight:800;color:#89CFF0;margin-bottom:6px">'+teamAbbr+' Roster</div>';
+var groups=[
+{label:'Quarterbacks',key:'qb'},
+{label:'Running Backs',key:'rb'},
+{label:'Wide Receivers',key:'wr'},
+{label:'Tight Ends',key:'te'},
+{label:'Offensive Line',key:'ol'},
+{label:'Defensive Line',key:'dl'},
+{label:'Linebackers',key:'lb'},
+{label:'Defensive Backs',key:'db'},
+{label:'Kicker',key:'k'},
+{label:'Punter',key:'p'}
+];
+groups.forEach(function(grp){
+var players=roster[grp.key]||[];
+if(players.length===0)return;
+h+='<div style="font-size:9px;font-weight:700;color:#ffd54f;margin:6px 0 2px">'+grp.label+' ('+players.length+')</div>';
+h+='<table style="width:100%;font-size:8px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#89CFF0;font-weight:600;border-bottom:1px solid rgba(137,207,240,.1)">';
+h+='<td style="padding:2px">#</td><td>Name</td><td>Pos</td><td>Age</td><td>Exp</td><td>Ht</td><td>Wt</td></tr>';
+players.forEach(function(p,i){
+var bg=i%2===0?'rgba(137,207,240,.02)':'transparent';
+var starter=i===0?'font-weight:700;color:#66bb6a':'';
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.03);background:'+bg+'">';
+h+='<td style="padding:2px;'+starter+'">'+p.num+'</td>';
+h+='<td style="'+starter+'">'+p.name+(i===0?' *':'')+'</td>';
+h+='<td>'+p.pos+'</td>';
+h+='<td>'+p.age+'</td>';
+h+='<td>'+p.exp+'yr</td>';
+h+='<td>'+p.ht+'</td>';
+h+='<td>'+p.wt+'</td>';
+h+='</tr>';
+});
+h+='</table>';
+});
+return h;
+}
+
+function renderNFLInjuryPanel(injuries,teamAbbr){
+if(!injuries||injuries.length===0)return'<div style="font-size:10px;color:#66bb6a;padding:6px">No injuries reported for '+teamAbbr+'</div>';
+var h='<div style="font-size:11px;font-weight:800;color:#89CFF0;margin-bottom:6px">'+teamAbbr+' Injuries ('+injuries.length+')</div>';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#89CFF0;font-weight:600;border-bottom:1px solid rgba(137,207,240,.1)">';
+h+='<td style="padding:2px">Player</td><td>Pos</td><td>Status</td><td>Injury</td></tr>';
+injuries.forEach(function(inj,i){
+var bg=i%2===0?'rgba(137,207,240,.02)':'transparent';
+var sClr='#e0e0e0';
+var st=inj.status.toLowerCase();
+if(st==='out'||st==='injured-reserve'||st==='ir')sClr='#ef5350';
+else if(st==='doubtful')sClr='#ff9800';
+else if(st==='questionable')sClr='#ffd54f';
+else if(st==='probable')sClr='#66bb6a';
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.03);background:'+bg+'">';
+h+='<td style="padding:2px;font-weight:700">'+inj.name+'</td>';
+h+='<td>'+inj.pos+'</td>';
+h+='<td style="color:'+sClr+';font-weight:700;text-transform:uppercase;font-size:8px">'+inj.status+'</td>';
+h+='<td>'+((inj.detail||'')+(inj.side?' ('+inj.side+')':''))+'</td>';
+h+='</tr>';
+});
+h+='</table>';
+return h;
+}
+
+/* ===== NFL ROSTER/INJURY INJECT (fixed v3) ===== */
+var espnNFLIds={ari:22,atl:1,bal:33,buf:2,car:29,chi:3,cin:4,cle:5,dal:6,den:7,det:8,gb:9,hou:34,ind:11,jax:30,kc:12,lv:13,lac:24,lar:14,mia:15,min:16,ne:17,no:18,nyg:19,nyj:20,phi:21,pit:23,sf:25,sea:26,tb:27,ten:10,wsh:28};
+function extractNFLTeams(card){
+var imgs=card.querySelectorAll('img');
+var teams=[];
+imgs.forEach(function(img){
+var m=(img.src||'').match(/nfl\/500\/([a-z]+)\./);
+if(m){var t=m.pop();if(teams.indexOf(t)<0)teams.push(t);}
+});
+return teams;
+}
+setInterval(function(){
+var cards=document.querySelectorAll('.gc[data-gpk^="nfl_"]');
+cards.forEach(function(card){
+if(card.querySelector('.nfl-roster-btn'))return;
+var btnRow=null;
+card.querySelectorAll('button.xb').forEach(function(b){
+if(b.textContent==='Notes')btnRow=b.parentElement;
+});
+if(!btnRow)return;
+var teams=extractNFLTeams(card);
+if(teams.length<2)return;
+var hAbbr=teams.shift();
+var aAbbr=teams.shift();
+var hid=espnNFLIds[hAbbr]||'';
+var aid=espnNFLIds[aAbbr]||'';
+if(!hid||!aid)return;
+var hA=hAbbr.toUpperCase();
+var aA=aAbbr.toUpperCase();
+var rBtn=document.createElement('button');
+rBtn.className='xb nfl-roster-btn';
+rBtn.textContent='Rosters';
+rBtn.style.marginLeft='4px';
+var iBtn=document.createElement('button');
+iBtn.className='xb nfl-inj-btn';
+iBtn.textContent='Injuries';
+iBtn.style.marginLeft='4px';
+btnRow.appendChild(rBtn);
+btnRow.appendChild(iBtn);
+var rPanel=document.createElement('div');
+rPanel.style.display='none';
+var iPanel=document.createElement('div');
+iPanel.style.display='none';
+btnRow.parentElement.insertBefore(rPanel,btnRow.nextSibling);
+btnRow.parentElement.insertBefore(iPanel,rPanel.nextSibling);
+rBtn.addEventListener('click',function(){
+if(rPanel.style.display==='block'){rPanel.style.display='none';return;}
+rPanel.style.display='block';
+rPanel.innerHTML='<div class="ld"><div class="spin"></div> Loading rosters...</div>';
+Promise.all([fetchNFLRoster(hid),fetchNFLRoster(aid)]).then(function(r){
+var hr=r.shift();var ar=r.shift();
+rPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+renderNFLRosterPanel(hr,hA)+'</div><div style="flex:1;min-width:140px">'+renderNFLRosterPanel(ar,aA)+'</div></div>';
+});
+});
+iBtn.addEventListener('click',function(){
+if(iPanel.style.display==='block'){iPanel.style.display='none';return;}
+iPanel.style.display='block';
+iPanel.innerHTML='<div class="ld"><div class="spin"></div> Loading injuries...</div>';
+Promise.all([fetchNFLInjuries(hid),fetchNFLInjuries(aid)]).then(function(r){
+var hi=r.shift();var ai=r.shift();
+iPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+renderNFLInjuryPanel(hi,hA)+'</div><div style="flex:1;min-width:140px">'+renderNFLInjuryPanel(ai,aA)+'</div></div>';
+});
+});
+});
+},2000);
+
+/* ===== NFL PROPS TAB ===== */
+function renderNFLPropsTab(){
+var el=document.getElementById('tp-pp');
+if(!el)return;
+el.innerHTML='<div class="ld"><div class="spin"></div> Loading NFL Props...</div>';
+var url='https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week='+NFL_WEEK;
+gfetch(url).then(function(sb){
+if(!sb||!sb.events||sb.events.length===0){el.innerHTML='<div class="no-data">No NFL games this week.</div>';return;}
+var qbs=[];
+var rushers=[];
+var receivers=[];
+sb.events.forEach(function(ev){
+var comp=ev.competitions?ev.competitions.shift():null;
+if(!comp)return;
+comp.competitors.forEach(function(team){
+var abbr=(team.team.abbreviation||'').toUpperCase();
+var opp='';
+comp.competitors.forEach(function(t2){if(t2.id!==team.id)opp=(t2.team.abbreviation||'').toUpperCase();});
+var leaders=team.leaders||[];
+leaders.forEach(function(cat){
+var name=cat.leaders&&cat.leaders.length>0?cat.leaders.shift().displayName:'TBD';
+var val=cat.leaders&&cat.leaders.length>0?cat.leaders.shift().value:0;
+if(cat.name==='passingYards')qbs.push({name:name,team:abbr,opp:opp,stat:'Pass Yds',val:val});
+if(cat.name==='rushingYards')rushers.push({name:name,team:abbr,opp:opp,stat:'Rush Yds',val:val});
+if(cat.name==='receivingYards')receivers.push({name:name,team:abbr,opp:opp,stat:'Rec Yds',val:val});
+});
+});
+});
+var h='<div style="padding:8px">';
+h+='<div style="font-size:14px;font-weight:900;color:#89CFF0;margin-bottom:8px">NFL Player Props — Week '+NFL_WEEK+'</div>';
+h+='<div style="font-size:11px;font-weight:800;color:#ffd54f;margin:8px 0 4px">Top QBs (Passing Yards)</div>';
+h+='<table style="width:100%;font-size:10px;border-collapse:collapse">';
+h+='<tr style="color:#89CFF0"><th style="text-align:left;padding:2px">Player</th><th>Team</th><th>vs</th><th>Pass Yds</th></tr>';
+qbs.sort(function(a,b){return b.val-a.val;});
+qbs.forEach(function(p){
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.1)"><td style="padding:2px">'+p.name+'</td><td style="text-align:center">'+p.team+'</td><td style="text-align:center">'+p.opp+'</td><td style="text-align:center;color:#66bb6a">'+p.val+'</td></tr>';
+});
+h+='</table>';
+h+='<div style="font-size:11px;font-weight:800;color:#ffd54f;margin:8px 0 4px">Top Rushers (Rushing Yards)</div>';
+h+='<table style="width:100%;font-size:10px;border-collapse:collapse">';
+h+='<tr style="color:#89CFF0"><th style="text-align:left;padding:2px">Player</th><th>Team</th><th>vs</th><th>Rush Yds</th></tr>';
+rushers.sort(function(a,b){return b.val-a.val;});
+rushers.forEach(function(p){
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.1)"><td style="padding:2px">'+p.name+'</td><td style="text-align:center">'+p.team+'</td><td style="text-align:center">'+p.opp+'</td><td style="text-align:center;color:#66bb6a">'+p.val+'</td></tr>';
+});
+h+='</table>';
+h+='<div style="font-size:11px;font-weight:800;color:#ffd54f;margin:8px 0 4px">Top Receivers (Receiving Yards)</div>';
+h+='<table style="width:100%;font-size:10px;border-collapse:collapse">';
+h+='<tr style="color:#89CFF0"><th style="text-align:left;padding:2px">Player</th><th>Team</th><th>vs</th><th>Rec Yds</th></tr>';
+receivers.sort(function(a,b){return b.val-a.val;});
+receivers.forEach(function(p){
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.1)"><td style="padding:2px">'+p.name+'</td><td style="text-align:center">'+p.team+'</td><td style="text-align:center">'+p.opp+'</td><td style="text-align:center;color:#66bb6a">'+p.val+'</td></tr>';
+});
+h+='</table></div>';
+el.innerHTML=h;
+});
+}
 
 </script>
 </body>
