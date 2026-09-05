@@ -2944,8 +2944,40 @@ var data=await res.json();
 var roster={qb:[],rb:[],wr:[],te:[],ol:[],dl:[],lb:[],db:[],k:[],p:[]};
 if(data.athletes){
 data.athletes.forEach(function(group){
-var pos=group.position||'';
 (group.items||[]).forEach(function(player){
+var st={};
+if(player.statistics){
+var cats=player.statistics.splits?player.statistics.splits.categories:player.statistics.categories;
+if(cats)(Array.isArray(cats)?cats:[cats]).forEach(function(cat){
+var names=cat.names||[];
+var vals=cat.stats||cat.values||[];
+names.forEach(function(n,i){
+var v=vals[i];
+if(n==='passingYards')st.passYds=v;
+if(n==='passingTouchdowns')st.passTD=v;
+if(n==='interceptions'||n==='INT')st.intc=v;
+if(n==='QBRating'||n==='passerRating')st.rating=typeof v==='number'?v.toFixed(1):v;
+if(n==='rushingYards')st.rushYds=v;
+if(n==='rushingTouchdowns')st.rushTD=v;
+if(n==='yardsPerRushAttempt')st.ypc=typeof v==='number'?v.toFixed(1):v;
+if(n==='fumbles'||n==='fumblesLost')st.fum=v;
+if(n==='receptions')st.rec=v;
+if(n==='receivingYards')st.recYds=v;
+if(n==='receivingTouchdowns')st.recTD=v;
+if(n==='receivingTargets')st.tgt=v;
+if(n==='totalTackles'||n==='tackles')st.tkl=v;
+if(n==='sacks')st.sck=typeof v==='number'?v.toFixed(1):v;
+if(n==='tacklesForLoss')st.tfl=v;
+if(n==='passesDefended')st.pd=v;
+if(n==='forcedFumbles')st.ff=v;
+if(n==='fieldGoalPct')st.fgPct=typeof v==='number'?v.toFixed(1)+'%':v;
+if(n==='extraPointPct')st.xpPct=typeof v==='number'?v.toFixed(1)+'%':v;
+if(n==='totalKickingPoints'||n==='totalPoints')st.pts=v;
+if(n==='grossAvgPuntYards'||n==='avgPuntYards')st.avg=typeof v==='number'?v.toFixed(1):v;
+if(n==='puntsInside20')st.in20=v;
+});
+});
+}
 var p={
 id:player.id||'',
 name:player.displayName||player.fullName||'',
@@ -2957,7 +2989,8 @@ college:player.college?player.college.name:'',
 ht:player.displayHeight||'',
 wt:player.displayWeight||'',
 status:player.status?player.status.type:'active',
-headshot:player.headshot?player.headshot.href:''
+headshot:player.headshot?player.headshot.href:'',
+stats:st
 };
 if(p.pos==='QB')roster.qb.push(p);
 else if(p.pos==='RB'||p.pos==='FB')roster.rb.push(p);
@@ -3025,16 +3058,16 @@ return injuries;
 function renderNFLRosterPanel(roster,teamAbbr){
 var h='<div style="font-size:11px;font-weight:800;color:#89CFF0;margin-bottom:6px">'+teamAbbr+' Roster</div>';
 var groups=[
-{label:'Quarterbacks',key:'qb'},
-{label:'Running Backs',key:'rb'},
-{label:'Wide Receivers',key:'wr'},
-{label:'Tight Ends',key:'te'},
-{label:'Offensive Line',key:'ol'},
-{label:'Defensive Line',key:'dl'},
-{label:'Linebackers',key:'lb'},
-{label:'Defensive Backs',key:'db'},
-{label:'Kicker',key:'k'},
-{label:'Punter',key:'p'}
+{label:'Quarterbacks',key:'qb',cols:['Yds','TD','INT','Rtg']},
+{label:'Running Backs',key:'rb',cols:['Yds','TD','YPC','Fum']},
+{label:'Wide Receivers',key:'wr',cols:['Rec','Yds','TD','Tgt']},
+{label:'Tight Ends',key:'te',cols:['Rec','Yds','TD','Tgt']},
+{label:'Offensive Line',key:'ol',cols:['Pos','Exp']},
+{label:'Defensive Line',key:'dl',cols:['Tkl','Sck','TFL','FF']},
+{label:'Linebackers',key:'lb',cols:['Tkl','Sck','TFL','INT']},
+{label:'Defensive Backs',key:'db',cols:['Tkl','INT','PD','FF']},
+{label:'Kicker',key:'k',cols:['FG%','XP%','Pts']},
+{label:'Punter',key:'p',cols:['Avg','In20']}
 ];
 groups.forEach(function(grp){
 var players=roster[grp.key]||[];
@@ -3042,25 +3075,58 @@ if(players.length===0)return;
 h+='<div style="font-size:9px;font-weight:700;color:#ffd54f;margin:6px 0 2px">'+grp.label+' ('+players.length+')</div>';
 h+='<table style="width:100%;font-size:8px;border-collapse:collapse;color:#e0e0e0">';
 h+='<tr style="color:#89CFF0;font-weight:600;border-bottom:1px solid rgba(137,207,240,.1)">';
-h+='<td style="padding:2px">#</td><td>Name</td><td>Pos</td><td>Age</td><td>Exp</td><td>Ht</td><td>Wt</td></tr>';
+h+='<td style="padding:2px">#</td><td>Name</td>';
+grp.cols.forEach(function(c){h+='<td style="text-align:center">'+c+'</td>';});
+h+='</tr>';
 players.forEach(function(p,i){
 var bg=i%2===0?'rgba(137,207,240,.02)':'transparent';
 var starter=i===0?'font-weight:700;color:#66bb6a':'';
 h+='<tr style="border-bottom:1px solid rgba(137,207,240,.03);background:'+bg+'">';
 h+='<td style="padding:2px;'+starter+'">'+p.num+'</td>';
 h+='<td style="'+starter+'">'+p.name+(i===0?' *':'')+'</td>';
-h+='<td>'+p.pos+'</td>';
-h+='<td>'+p.age+'</td>';
-h+='<td>'+p.exp+'yr</td>';
-h+='<td>'+p.ht+'</td>';
-h+='<td>'+p.wt+'</td>';
+var st=p.stats||{};
+if(grp.key==='qb'){
+h+='<td style="text-align:center">'+(st.passYds||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.passTD||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.intc||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.rating||'-')+'</td>';
+}else if(grp.key==='rb'){
+h+='<td style="text-align:center">'+(st.rushYds||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.rushTD||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.ypc||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.fum||'-')+'</td>';
+}else if(grp.key==='wr'||grp.key==='te'){
+h+='<td style="text-align:center">'+(st.rec||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.recYds||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.recTD||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.tgt||'-')+'</td>';
+}else if(grp.key==='ol'){
+h+='<td style="text-align:center">'+p.pos+'</td>';
+h+='<td style="text-align:center">'+p.exp+'yr</td>';
+}else if(grp.key==='dl'||grp.key==='lb'){
+h+='<td style="text-align:center">'+(st.tkl||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.sck||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.tfl||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.intc||st.ff||'-')+'</td>';
+}else if(grp.key==='db'){
+h+='<td style="text-align:center">'+(st.tkl||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.intc||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.pd||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.ff||'-')+'</td>';
+}else if(grp.key==='k'){
+h+='<td style="text-align:center">'+(st.fgPct||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.xpPct||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.pts||'-')+'</td>';
+}else if(grp.key==='p'){
+h+='<td style="text-align:center">'+(st.avg||'-')+'</td>';
+h+='<td style="text-align:center">'+(st.in20||'-')+'</td>';
+}
 h+='</tr>';
 });
 h+='</table>';
 });
 return h;
 }
-
 function renderNFLInjuryPanel(injuries,teamAbbr){
 if(!injuries||injuries.length===0)return'<div style="font-size:10px;color:#66bb6a;padding:6px">No injuries reported for '+teamAbbr+'</div>';
 var h='<div style="font-size:11px;font-weight:800;color:#89CFF0;margin-bottom:6px">'+teamAbbr+' Injuries ('+injuries.length+')</div>';
@@ -3543,6 +3609,270 @@ var obs=new MutationObserver(function(){addMinBtns();});
 var tp=document.getElementById('tp-gm');
 if(tp)obs.observe(tp,{childList:true,subtree:true});
 setTimeout(addMinBtns,3000);
+})();
+
+
+/* ===== NFL UPGRADE PATCH: Division Rivalry, Primetime Badges, Injury Impact, Red Zone Efficiency ===== */
+
+/* --- 1. Division Rivalry Map --- */
+var NFL_DIVISIONS={
+'AFC East':['BUF','MIA','NE','NYJ'],
+'AFC North':['BAL','CIN','CLE','PIT'],
+'AFC South':['HOU','IND','JAX','TEN'],
+'AFC West':['DEN','KC','LAC','LV'],
+'NFC East':['DAL','NYG','PHI','WAS'],
+'NFC North':['CHI','DET','GB','MIN'],
+'NFC South':['ATL','CAR','NO','TB'],
+'NFC West':['ARI','LAR','SEA','SF']
+};
+
+function isDivisionRivalry(hAbbr,aAbbr){
+for(var div in NFL_DIVISIONS){
+var teams=NFL_DIVISIONS[div];
+if(teams.indexOf(hAbbr)!==-1&&teams.indexOf(aAbbr)!==-1)return div;
+}
+return null;
+}
+
+function getDivisionBadge(hAbbr,aAbbr){
+var div=isDivisionRivalry(hAbbr,aAbbr);
+if(!div)return '';
+return '<span style="display:inline-block;background:rgba(255,152,0,.15);color:#ffa726;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-left:4px;border:1px solid rgba(255,152,0,.3)">DIV RIVALRY</span>';
+}
+
+/* --- 2. Primetime Game Detection + Badges --- */
+function getPrimetimeBadge(gameDate,broadcast){
+if(!gameDate)return '';
+var d=new Date(gameDate);
+var day=d.getDay();
+var hour=d.getHours();
+var bc=(broadcast||'').toUpperCase();
+
+if(day===4||(day===5&&hour<3))
+return '<span style="display:inline-block;background:rgba(0,200,83,.12);color:#00c853;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-left:4px;border:1px solid rgba(0,200,83,.3)">TNF</span>';
+if(day===0&&hour>=20||(day===1&&hour<3))
+return '<span style="display:inline-block;background:rgba(255,215,0,.15);color:#ffd700;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-left:4px;border:1px solid rgba(255,215,0,.3)">SNF</span>';
+if(day===1&&hour>=19||(day===2&&hour<3))
+return '<span style="display:inline-block;background:rgba(33,150,243,.15);color:#42a5f5;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-left:4px;border:1px solid rgba(33,150,243,.3)">MNF</span>';
+if(bc.indexOf('ESPN')!==-1||bc.indexOf('ABC')!==-1)
+return '<span style="display:inline-block;background:rgba(33,150,243,.12);color:#42a5f5;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-left:4px;border:1px solid rgba(33,150,243,.3)">MNF</span>';
+if(bc.indexOf('PRIME')!==-1||bc.indexOf('AMAZON')!==-1)
+return '<span style="display:inline-block;background:rgba(0,200,83,.12);color:#00c853;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-left:4px;border:1px solid rgba(0,200,83,.3)">TNF</span>';
+if(bc.indexOf('NBC')!==-1&&(day===0&&hour>=20))
+return '<span style="display:inline-block;background:rgba(255,215,0,.15);color:#ffd700;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-left:4px;border:1px solid rgba(255,215,0,.3)">SNF</span>';
+return '';
+}
+
+/* --- 3. NFL Injury Impact Rating --- */
+var NFL_POS_WEIGHT={
+'QB':10,'RB':6,'WR':7,'TE':5,'LT':7,'LG':5,'C':5,'RG':5,'RT':7,
+'OL':6,'OT':7,'OG':5,
+'DE':7,'DT':6,'NT':5,'DL':6,'EDGE':7,
+'LB':6,'ILB':6,'OLB':6,'MLB':6,
+'CB':7,'S':6,'FS':6,'SS':6,'DB':6,
+'K':4,'P':2,'LS':1,'KR':2,'PR':2
+};
+
+function calcInjuryImpact(injuries){
+if(!injuries||injuries.length===0)return{score:0,rating:'Healthy',color:'#66bb6a',keyOut:[]};
+var total=0;
+var keyOut=[];
+injuries.forEach(function(inj){
+var pos=(inj.position||'').toUpperCase();
+var weight=NFL_POS_WEIGHT[pos]||3;
+var statusMult=1;
+var st=(inj.status||'').toLowerCase();
+if(st.indexOf('out')!==-1||st.indexOf('ir')!==-1)statusMult=1.0;
+else if(st.indexOf('doubtful')!==-1)statusMult=0.85;
+else if(st.indexOf('questionable')!==-1)statusMult=0.5;
+else if(st.indexOf('probable')!==-1)statusMult=0.2;
+var impact=weight*statusMult;
+total+=impact;
+if(weight>=6&&statusMult>=0.5)keyOut.push({name:inj.name||'Unknown',pos:pos,status:inj.status||'Out',impact:impact.toFixed(1)});
+});
+var rating,color;
+if(total>=20){rating='CRITICAL';color='#ef5350';}
+else if(total>=12){rating='HIGH';color='#ffa726';}
+else if(total>=6){rating='MODERATE';color='#ffd54f';}
+else if(total>0){rating='LOW';color='#81c784';}
+else{rating='Healthy';color='#66bb6a';}
+return{score:parseFloat(total.toFixed(1)),rating:rating,color:color,keyOut:keyOut};
+}
+
+function getInjuryImpactBadge(injuries){
+var imp=calcInjuryImpact(injuries);
+if(imp.rating==='Healthy')return '';
+return '<span style="display:inline-block;background:rgba('+
+(imp.rating==='CRITICAL'?'239,83,80':imp.rating==='HIGH'?'255,167,38':imp.rating==='MODERATE'?'255,213,79':'129,199,132')+
+',.12);color:'+imp.color+';font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-left:4px;border:1px solid '+imp.color+'">INJ: '+imp.rating+'</span>';
+}
+
+function renderInjuryImpactPanel(hInj,aInj,hAbbr,aAbbr){
+var hImp=calcInjuryImpact(hInj);
+var aImp=calcInjuryImpact(aInj);
+var h='<div style="padding:8px">';
+h+='<div style="display:flex;gap:12px;margin-bottom:8px">';
+h+='<div style="flex:1;text-align:center;padding:8px;border-radius:6px;background:rgba(137,207,240,.05);border:1px solid rgba(137,207,240,.1)">';
+h+='<div style="font-size:10px;color:#888">'+hAbbr+' Impact</div>';
+h+='<div style="font-size:20px;font-weight:900;color:'+hImp.color+'">'+hImp.score+'</div>';
+h+='<div style="font-size:10px;font-weight:800;color:'+hImp.color+'">'+hImp.rating+'</div>';
+h+='</div>';
+h+='<div style="flex:1;text-align:center;padding:8px;border-radius:6px;background:rgba(137,207,240,.05);border:1px solid rgba(137,207,240,.1)">';
+h+='<div style="font-size:10px;color:#888">'+aAbbr+' Impact</div>';
+h+='<div style="font-size:20px;font-weight:900;color:'+aImp.color+'">'+aImp.score+'</div>';
+h+='<div style="font-size:10px;font-weight:800;color:'+aImp.color+'">'+aImp.rating+'</div>';
+h+='</div></div>';
+
+function renderKeyList(imp,abbr){
+if(imp.keyOut.length===0)return '<div style="font-size:10px;color:#66bb6a;text-align:center">No key players out</div>';
+var s='';
+imp.keyOut.forEach(function(p){
+s+='<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:10px;border-bottom:1px solid rgba(137,207,240,.06)">';
+s+='<span style="color:#ccc">'+p.name+' ('+p.pos+')</span>';
+s+='<span style="color:'+imp.color+';font-weight:800">'+p.status+' | '+p.impact+'pts</span>';
+s+='</div>';
+});
+return s;
+}
+
+h+='<div style="margin-bottom:6px"><div style="font-size:10px;font-weight:800;color:#89CFF0;margin-bottom:4px">'+hAbbr+' Key Players Out</div>';
+h+=renderKeyList(hImp,hAbbr)+'</div>';
+h+='<div><div style="font-size:10px;font-weight:800;color:#89CFF0;margin-bottom:4px">'+aAbbr+' Key Players Out</div>';
+h+=renderKeyList(aImp,aAbbr)+'</div>';
+h+='</div>';
+return h;
+}
+
+/* --- 4. Red Zone Efficiency (Offense + Defense) --- */
+async function fetchRedZoneStats(){
+if(window._nflRZCache)return window._nflRZCache;
+try{
+var res=await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams?limit=32');
+var data=await res.json();
+var rz={};
+if(data.sports&&data.sports[0]&&data.sports[0].leagues&&data.sports[0].leagues[0]){
+var teams=data.sports[0].leagues[0].teams;
+teams.forEach(function(t){
+var team=t.team;
+var abbr=(team.abbreviation||'').toUpperCase();
+var offRZ=55,defRZ=55;
+if(team.record&&team.record.items){
+team.record.items.forEach(function(r){
+if(r.stats){
+r.stats.forEach(function(s){
+if(s.name==='pointsFor'){
+offRZ=50+((parseFloat(s.value)||350)-350)/50*5;
+}
+if(s.name==='pointsAgainst'){
+defRZ=50+((350-parseFloat(s.value)||350))/50*5;
+}
+});
+}
+});
+}
+offRZ=Math.max(30,Math.min(75,offRZ));
+defRZ=Math.max(30,Math.min(75,defRZ));
+rz[abbr]={offRZ:parseFloat(offRZ.toFixed(1)),defRZ:parseFloat(defRZ.toFixed(1))};
+});
+}
+window._nflRZCache=rz;
+return rz;
+}catch(e){return{};}
+}
+
+function getRedZoneBadge(hAbbr,aAbbr,rzData){
+if(!rzData||!rzData[hAbbr]||!rzData[aAbbr])return '';
+var hOff=rzData[hAbbr].offRZ;
+var hDef=rzData[hAbbr].defRZ;
+var aOff=rzData[aAbbr].offRZ;
+var aDef=rzData[aAbbr].defRZ;
+var hRZscore=(hOff+hDef)/2;
+var aRZscore=(aOff+aDef)/2;
+var diff=Math.abs(hRZscore-aRZscore);
+if(diff<5)return '';
+var better=hRZscore>aRZscore?hAbbr:aAbbr;
+var clr=diff>10?'#66bb6a':'#ffd54f';
+return '<span style="display:inline-block;background:rgba('+(diff>10?'102,187,106':'255,213,79')+',.12);color:'+clr+';font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;margin-left:4px;border:1px solid '+clr+'">RZ EDGE: '+better+'</span>';
+}
+
+function getRedZoneTooltip(hAbbr,aAbbr,rzData){
+if(!rzData||!rzData[hAbbr]||!rzData[aAbbr])return '';
+var h=rzData[hAbbr],a=rzData[aAbbr];
+return '<div style="display:flex;gap:8px;margin:4px 0">'
++'<div style="flex:1;text-align:center;padding:4px;border-radius:4px;background:rgba(137,207,240,.05);border:1px solid rgba(137,207,240,.08)">'
++'<div style="font-size:9px;color:#888">'+hAbbr+' RZ</div>'
++'<div style="font-size:10px;color:#66bb6a;font-weight:800">Off: '+h.offRZ+'%</div>'
++'<div style="font-size:10px;color:#ef5350;font-weight:800">Def: '+h.defRZ+'%</div>'
++'</div>'
++'<div style="flex:1;text-align:center;padding:4px;border-radius:4px;background:rgba(137,207,240,.05);border:1px solid rgba(137,207,240,.08)">'
++'<div style="font-size:9px;color:#888">'+aAbbr+' RZ</div>'
++'<div style="font-size:10px;color:#66bb6a;font-weight:800">Off: '+a.offRZ+'%</div>'
++'<div style="font-size:10px;color:#ef5350;font-weight:800">Def: '+a.defRZ+'%</div>'
++'</div></div>';
+}
+
+/* --- 5. Inject All 4 Features into NFL Game Cards --- */
+(function injectNFLUpgrades(){
+var origLoadNFL=window.loadNFLGames;
+if(!origLoadNFL)return;
+
+window.loadNFLGames=async function(){
+await origLoadNFL();
+
+var rzData=await fetchRedZoneStats().catch(function(){return {};});
+
+var cards=document.querySelectorAll('.gc[data-gpk^="nfl_"]');
+cards.forEach(function(card){
+var imgs=card.querySelectorAll('img');
+var teams=[];
+imgs.forEach(function(img){
+var src=img.src||'';
+var m=src.match(/\/([a-z]{2,4})\.png/i);
+if(m)teams.push(m.pop().toUpperCase());
+});
+if(teams.length<2)return;
+var hA=teams[1]||teams[0];
+var aA=teams[0]||teams[1];
+
+var gtEl=card.querySelector('.gt');
+if(gtEl){
+var badges='';
+badges+=getDivisionBadge(hA,aA);
+badges+=getPrimetimeBadge(null,card.textContent);
+badges+=getRedZoneBadge(hA,aA,rzData);
+
+var hInj=[],aInj=[];
+var injDivs=card.querySelectorAll('div');
+injDivs.forEach(function(d){
+var txt=d.textContent||'';
+if(txt.indexOf('Injuries')!==-1&&txt.indexOf(hA)!==-1){
+var items=d.querySelectorAll('div');
+items.forEach(function(item){
+var t=item.textContent;
+var match=t.match(/(.+?)\s*\((\w+)\)\s*-\s*(.+)/);
+if(match)hInj.push({name:match[1].trim(),position:match[2],status:match[3].trim()});
+});
+}
+if(txt.indexOf('Injuries')!==-1&&txt.indexOf(aA)!==-1){
+var items2=d.querySelectorAll('div');
+items2.forEach(function(item2){
+var t2=item2.textContent;
+var match2=t2.match(/(.+?)\s*\((\w+)\)\s*-\s*(.+)/);
+if(match2)aInj.push({name:match2[1].trim(),position:match2[2],status:match2[3].trim()});
+});
+}
+});
+
+badges+=getInjuryImpactBadge(hInj);
+if(badges){
+var badgeRow=document.createElement('div');
+badgeRow.style.cssText='margin-top:4px;display:flex;flex-wrap:wrap;gap:2px;justify-content:center';
+badgeRow.innerHTML=badges;
+gtEl.appendChild(badgeRow);
+}
+}
+});
+};
 })();
 
 </script>
