@@ -471,8 +471,7 @@ var margin=hSc-aSc;
 if(e.bl.spread!==undefined&&e.bl.spread!==null){
 var spVal=Math.abs(e.bl.spread)||1.5;
 var spFav=e.bl.spFav||e.hT;
-if(spFav===e.hT){e.bl.spW=(margin>=spVal);}
-else{e.bl.spW=(margin<=0||(margin<spVal));}
+if(e.bl.spread<0){e.bl.spW=(Math.abs(e.hSc-e.aSc)>=spVal&&((e.bl.spFav===e.hT&&e.hSc>e.aSc)||(e.bl.spFav===e.aT&&e.aSc>e.hSc)));}else{e.bl.spW=((e.bl.spFav===e.hT&&(e.aSc-e.hSc)<spVal)||(e.bl.spFav===e.aT&&(e.hSc-e.aSc)<spVal));}
 }
 if(e.bl.ouLine!==undefined&&e.bl.ouLine!==null){
 var ouNum=parseFloat(e.bl.ouLine)||8.5;
