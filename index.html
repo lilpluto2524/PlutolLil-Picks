@@ -471,8 +471,8 @@ var margin=hSc-aSc;
 if(e.bl.spread!==undefined&&e.bl.spread!==null){
 var spVal=Math.abs(e.bl.spread)||1.5;
 var spFav=e.bl.spFav||e.hT;
-if(spFav===e.hT)e.bl.spW=(margin>spVal);
-else e.bl.spW=((-margin)>spVal);
+if(spFav===e.hT){e.bl.spW=(margin>=spVal);}
+else{e.bl.spW=(margin<=0||(margin<spVal));}
 }
 if(e.bl.ouLine!==undefined&&e.bl.ouLine!==null){
 var ouNum=parseFloat(e.bl.ouLine)||8.5;
