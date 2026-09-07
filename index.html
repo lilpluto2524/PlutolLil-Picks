@@ -650,47 +650,75 @@ var conf=rawConf*0.85+0.02;
 return{hp:hp,ap:ap,conf:conf,f:f};
 }
 
-/* --- YRFI/NRFI Model (NRFI-biased) --- */
+
+/* --- YRFI/NRFI Model (Balanced + Pitcher Quality + OPS Tuned) --- */
 function predictYRFI(hSP,aSP,hD,aD,hId,vegasData){
-var nrfiBase=0.58;
-var yrfiProb=1-nrfiBase;
+var yrfiProb=0.42;
+
+/* --- Home SP quality --- */
 if(hSP&&hSP.era){
-var hSpEra=hSP.era;
-if(hSpEra<3.0)yrfiProb-=0.08;
-else if(hSpEra<3.5)yrfiProb-=0.05;
-else if(hSpEra>5.0)yrfiProb+=0.08;
-else if(hSpEra>4.5)yrfiProb+=0.04;
-if(hSP.whip&&hSP.whip<1.1)yrfiProb-=0.04;
-else if(hSP.whip&&hSP.whip>1.4)yrfiProb+=0.04;
-if(hSP.k9&&hSP.k9>10)yrfiProb-=0.03;
-else if(hSP.k9&&hSP.k9<6)yrfiProb+=0.03;
-if(hSP.bb9&&hSP.bb9>4)yrfiProb+=0.03;
-else if(hSP.bb9&&hSP.bb9<2.5)yrfiProb-=0.02;
-}
+if(hSP.era>5.0)yrfiProb+=0.10;
+else if(hSP.era>4.5)yrfiProb+=0.06;
+else if(hSP.era>4.0)yrfiProb+=0.03;
+else if(hSP.era<3.0)yrfiProb-=0.08;
+else if(hSP.era<3.5)yrfiProb-=0.04;
+if(hSP.whip&&hSP.whip>1.45)yrfiProb+=0.06;
+else if(hSP.whip&&hSP.whip>1.3)yrfiProb+=0.03;
+else if(hSP.whip&&hSP.whip<1.05)yrfiProb-=0.06;
+else if(hSP.whip&&hSP.whip<1.15)yrfiProb-=0.03;
+if(hSP.k9&&hSP.k9>10)yrfiProb-=0.04;
+else if(hSP.k9&&hSP.k9<6)yrfiProb+=0.05;
+if(hSP.bb9&&hSP.bb9>4)yrfiProb+=0.05;
+else if(hSP.bb9&&hSP.bb9<2)yrfiProb-=0.04;
+if(hSP.ip&&hSP.ip<30)yrfiProb+=0.04;
+}else{yrfiProb+=0.06;}
+
+/* --- Away SP quality --- */
 if(aSP&&aSP.era){
-var aSpEra=aSP.era;
-if(aSpEra<3.0)yrfiProb-=0.08;
-else if(aSpEra<3.5)yrfiProb-=0.05;
-else if(aSpEra>5.0)yrfiProb+=0.08;
-else if(aSpEra>4.5)yrfiProb+=0.04;
-if(aSP.whip&&aSP.whip<1.1)yrfiProb-=0.04;
-else if(aSP.whip&&aSP.whip>1.4)yrfiProb+=0.04;
-if(aSP.k9&&aSP.k9>10)yrfiProb-=0.03;
-else if(aSP.k9&&aSP.k9<6)yrfiProb+=0.03;
-if(aSP.bb9&&aSP.bb9>4)yrfiProb+=0.03;
-else if(aSP.bb9&&aSP.bb9<2.5)yrfiProb-=0.02;
-}
+if(aSP.era>5.0)yrfiProb+=0.10;
+else if(aSP.era>4.5)yrfiProb+=0.06;
+else if(aSP.era>4.0)yrfiProb+=0.03;
+else if(aSP.era<3.0)yrfiProb-=0.08;
+else if(aSP.era<3.5)yrfiProb-=0.04;
+if(aSP.whip&&aSP.whip>1.45)yrfiProb+=0.06;
+else if(aSP.whip&&aSP.whip>1.3)yrfiProb+=0.03;
+else if(aSP.whip&&aSP.whip<1.05)yrfiProb-=0.06;
+else if(aSP.whip&&aSP.whip<1.15)yrfiProb-=0.03;
+if(aSP.k9&&aSP.k9>10)yrfiProb-=0.04;
+else if(aSP.k9&&aSP.k9<6)yrfiProb+=0.05;
+if(aSP.bb9&&aSP.bb9>4)yrfiProb+=0.05;
+else if(aSP.bb9&&aSP.bb9<2)yrfiProb-=0.04;
+if(aSP.ip&&aSP.ip<30)yrfiProb+=0.04;
+}else{yrfiProb+=0.06;}
+
+/* --- Batting OPS (heavier weight) --- */
 var hOps=hD.hit?hD.hit.ops||0.720:0.720;
 var aOps=aD.hit?aD.hit.ops||0.720:0.720;
-if(hOps>0.780)yrfiProb+=0.03;
-else if(hOps<0.680)yrfiProb-=0.03;
-if(aOps>0.780)yrfiProb+=0.03;
-else if(aOps<0.680)yrfiProb-=0.03;
+if(hOps>0.800)yrfiProb+=0.06;
+else if(hOps>0.750)yrfiProb+=0.03;
+else if(hOps<0.650)yrfiProb-=0.06;
+else if(hOps<0.700)yrfiProb-=0.03;
+if(aOps>0.800)yrfiProb+=0.06;
+else if(aOps>0.750)yrfiProb+=0.03;
+else if(aOps<0.650)yrfiProb-=0.06;
+else if(aOps<0.700)yrfiProb-=0.03;
+
+/* --- Park Factor --- */
 var pf=(T[hId]?T[hId].pf:100);
-if(pf>105)yrfiProb+=0.02;
-else if(pf<95)yrfiProb-=0.02;
-yrfiProb=Math.max(0.15,Math.min(0.75,yrfiProb));
-var pick=yrfiProb>0.52?'YRFI':'NRFI';
+if(pf>108)yrfiProb+=0.04;
+else if(pf>103)yrfiProb+=0.02;
+else if(pf<93)yrfiProb-=0.04;
+else if(pf<97)yrfiProb-=0.02;
+
+/* --- Bullpen ERA as tiebreaker (bad BP = more likely YRFI if SP gets pulled early) --- */
+var hBpEra=hD.bp?hD.bp.era||4.2:4.2;
+var aBpEra=aD.bp?aD.bp.era||4.2:4.2;
+if(hBpEra>5.0&&aBpEra>5.0)yrfiProb+=0.03;
+else if(hBpEra<3.5&&aBpEra<3.5)yrfiProb-=0.03;
+
+/* --- Clamp and decide --- */
+yrfiProb=Math.max(0.22,Math.min(0.78,yrfiProb));
+var pick=yrfiProb>=0.50?'YRFI':'NRFI';
 var conf=pick==='YRFI'?yrfiProb:(1-yrfiProb);
 return{pick:pick,prob:conf,conf:Math.abs(conf-0.5)*2,yrfiProb:yrfiProb,nrfiProb:1-yrfiProb};
 }
@@ -3930,4 +3958,3 @@ gtEl.appendChild(badgeRow);
 </script>
 </body>
 </html>
-
