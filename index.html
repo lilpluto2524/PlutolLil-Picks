@@ -2717,15 +2717,15 @@ h+='<div style="display:flex;justify-content:space-around;margin:12px 0;padding:
 if(g.bl){
 var spClr='#e0e0e0',ouClr='#e0e0e0',fiClr='#e0e0e0';
 var spBg='transparent',ouBg='transparent',fiBg='transparent';
-var spBdr='transparent',ouBdr='transparent',fiBdr='transparent';
+var spBdr='rgba(137,207,240,0.2)',ouBdr='rgba(137,207,240,0.2)',fiBdr='rgba(137,207,240,0.2)';
 var spTag='',ouTag='',fiTag='';
-if(trkE){
-if(trkE&&trkE.spW===true){spClr='#66bb6a';spBg='rgba(102,187,106,0.1)';spBdr='#66bb6a';spTag=' ✅';}
-if(trkE&&trkE.spW===false){spClr='#ef5350';spBg='rgba(239,83,80,0.1)';spBdr='#ef5350';spTag=' ❌';}
-if(trkE&&trkE.ouW===true){ouClr='#66bb6a';ouBg='rgba(102,187,106,0.1)';ouBdr='#66bb6a';ouTag=' ✅';}
-if(trkE&&trkE.ouW===false){ouClr='#ef5350';ouBg='rgba(239,83,80,0.1)';ouBdr='#ef5350';ouTag=' ❌';}
-if(trkE&&trkE.fiW===true){fiClr='#66bb6a';fiBg='rgba(102,187,106,0.1)';fiBdr='#66bb6a';fiTag=' ✅';}
-if(trkE&&trkE.fiW===false){fiClr='#ef5350';fiBg='rgba(239,83,80,0.1)';fiBdr='#ef5350';fiTag=' ❌';}
+if(trkE&&trkE.bl){
+if(trkE.bl.spW===true){spClr='#66bb6a';spBg='rgba(102,187,106,0.1)';spBdr='#66bb6a';spTag=' ✅';}
+else if(trkE.bl.spW===false){spClr='#ef5350';spBg='rgba(239,83,80,0.1)';spBdr='#ef5350';spTag=' ❌';}
+if(trkE.bl.ouW===true){ouClr='#66bb6a';ouBg='rgba(102,187,106,0.1)';ouBdr='#66bb6a';ouTag=' ✅';}
+else if(trkE.bl.ouW===false){ouClr='#ef5350';ouBg='rgba(239,83,80,0.1)';ouBdr='#ef5350';ouTag=' ❌';}
+if(trkE.bl.fiW===true){fiClr='#66bb6a';fiBg='rgba(102,187,106,0.1)';fiBdr='#66bb6a';fiTag=' ✅';}
+else if(trkE.bl.fiW===false){fiClr='#ef5350';fiBg='rgba(239,83,80,0.1)';fiBdr='#ef5350';fiTag=' ❌';}
 }
 h+='<div style="text-align:center;padding:4px 8px;border-radius:6px;background:'+spBg+';border:1px solid '+spBdr+'"><div style="font-size:8px;color:#888">SPREAD</div><div style="font-size:11px;font-weight:800;color:'+spClr+'">'+(g.bl.spread||'--')+spTag+'</div></div>';
 h+='<div style="text-align:center;padding:4px 8px;border-radius:6px;background:'+ouBg+';border:1px solid '+ouBdr+'"><div style="font-size:8px;color:#888">O/U</div><div style="font-size:11px;font-weight:800;color:'+ouClr+'">'+(g.bl.ouPk||'--')+' '+(g.bl.ouLine||'--')+ouTag+'</div></div>';
@@ -2889,17 +2889,18 @@ h+='<tr style="color:#89CFF0;font-weight:800;border-bottom:1px solid rgba(137,20
 players.forEach(function(p){
 var avg=parseFloat(p.avg)||0.250;
 var ops=parseFloat(p.ops)||0.700;
-var hitProj=avg>=0.280?'Yes':(avg>=0.250?'Maybe':'No');
-var hitClr=avg>=0.280?'#66bb6a':(avg>=0.250?'#ffd54f':'#ef5350');
 var hrRate=parseInt(p.hr)||0;
 var hrProj=hrRate>=25?'Yes':(hrRate>=15?'Maybe':'No');
 var hrClr=hrRate>=25?'#66bb6a':(hrRate>=15?'#ffd54f':'#ef5350');
+var hitProj=avg>=0.280?'Yes':(avg>=0.250?'Maybe':'No');
+if(hrProj==='Yes')hitProj='Yes';
+if(hrProj==='Maybe'&&hitProj==='No')hitProj='Maybe';
+var hitClr=hitProj==='Yes'?'#66bb6a':(hitProj==='Maybe'?'#ffd54f':'#ef5350');
 h+='<tr style="border-bottom:1px solid rgba(137,207,240,.04)"><td style="padding:2px 4px;font-weight:700">'+p.name+'</td><td>'+p.avg+'</td><td>'+p.ops+'</td><td>'+p.hr+'</td><td style="color:'+hitClr+';font-weight:700">'+hitProj+'</td><td style="color:'+hrClr+';font-weight:700">'+hrProj+'</td></tr>';
 });
 h+='</table>';
 return h;
 }
-
 
 /* ===== NFL STANDINGS + RECORDS ===== */
 var NFLStandings={cache:null,ts:0};
