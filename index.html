@@ -1942,7 +1942,8 @@ h+='</div>';
 h+='<div class="tc">'+nflTeamImg(g.aId)+'<div class="ta" style="color:'+nflTeamClr(g.aId)+'">'+g.aI.a+'</div><div class="tr">'+g.aRec+'</div><div style="font-size:9px;color:#888">AWAY</div></div>';
 h+='</div>';
 
-h+='<div style="text-align:center;font-size:10px;margin:4px 0"><strong>'+g.hI.a+' '+g.bl.hSc+' - '+g.aI.a+' '+g.bl.aSc+'</strong></div>';
+var scoreLabel=(g.pg.status==='final')?'FINAL: '+g.hI.a+' '+g.pg.hScore+' - '+g.aI.a+' '+g.pg.aScore:g.hI.a+' '+g.bl.hSc+' - '+g.aI.a+' '+g.bl.aSc;
+h+='<div style="text-align:center;font-size:10px;margin:4px 0"><strong>'+scoreLabel+'</strong></div>';
 var nTrk=nflTrk.d.p.find(function(x){return x.g===g.gpk;});
 var nSpBdr='rgba(137,207,240,.3)',nOuBdr='rgba(137,207,240,.3)',nMlBdr='rgba(137,207,240,.3)';
 if(nTrk&&nTrk.w!==null){if(nTrk.w)nMlBdr='#66bb6a';else nMlBdr='#ef5350';if(nTrk.bl&&nTrk.bl.spW===true)nSpBdr='#66bb6a';else if(nTrk.bl&&nTrk.bl.spW===false)nSpBdr='#ef5350';if(nTrk.bl&&nTrk.bl.ouW===true)nOuBdr='#66bb6a';else if(nTrk.bl&&nTrk.bl.ouW===false)nOuBdr='#ef5350';}
