@@ -2538,6 +2538,8 @@ var sc=gm.status?gm.status.statusCode:'';
 if(sc==='I'||sc==='IR'||sc==='MA'||sc==='MC'){
 liveGames.push({
 gpk:'mlb_'+gm.gamePk,
+hT:gm.teams.home.team.abbreviation||'HOME',
+aT:gm.teams.away.team.abbreviation||'AWAY',
 hSc:gm.teams.home.score||0,
 aSc:gm.teams.away.score||0,
 inn:gm.linescore?gm.linescore.currentInningOrdinal:'',
@@ -2564,7 +2566,7 @@ liveGames.forEach(function(lg){
 var prev=prevLiveStates[lg.gpk];
 if(prev&&(prev.hSc!==lg.hSc||prev.aSc!==lg.aSc)){
 playSound('score');
-sendNotif('Score Update',lg.hSc+'-'+lg.aSc+' ('+lg.half+' '+lg.inn+')');
+sendNotif('Score Update',lg.hT+' '+lg.hSc+' - '+lg.aT+' '+lg.aSc+' ('+lg.half+' '+lg.inn+')');
 }
 prevLiveStates[lg.gpk]=lg;
 });
