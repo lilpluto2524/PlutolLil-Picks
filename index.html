@@ -2777,7 +2777,8 @@ h+='<div style="text-align:center;padding:4px 8px;border-radius:6px;background:'
 h+='</div>';
 
 h+='<div style="display:flex;justify-content:space-around;margin:8px 0;padding:8px;background:rgba(137,207,240,0.03);border-radius:8px">';
-if(g.pg.status==='Final'||g.pg.status==='Final/OT'){h+='<div style="text-align:center"><div style="font-size:8px;color:#66bb6a">FINAL</div><div style="font-size:11px;font-weight:800;color:#fff">'+g.hScore+' - '+g.aScore+'</div><div style="font-size:7px;color:#888">Pred: '+(g.bl?g.bl.hSc:'?')+'-'+(g.bl?g.bl.aSc:'?')+'</div></div>';}else{h+='<div style="text-align:center"><div style="font-size:8px;color:#888">PRED SCORE</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+(g.bl?g.bl.hSc:'?')+'-'+(g.bl?g.bl.aSc:'?')+'</div></div>';}
+var isFinal=(g.pg&&(g.pg.status==='Final'||g.pg.status==='Final/OT'))||(g.status==='Final');
+if(isFinal){h+='<div style="text-align:center"><div style="font-size:8px;color:#66bb6a">FINAL</div><div style="font-size:11px;font-weight:800;color:#fff">'+(g.hScore||g.gm.teams.home.score||'?')+' - '+(g.aScore||g.gm.teams.away.score||'?')+'</div><div style="font-size:7px;color:#888">Pred: '+(g.bl?g.bl.hSc:'?')+'-'+(g.bl?g.bl.aSc:'?')+'</div></div>';}else{h+='<div style="text-align:center"><div style="font-size:8px;color:#888">PRED SCORE</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+(g.bl?g.bl.hSc:'?')+'-'+(g.bl?g.bl.aSc:'?')+'</div></div>';}
 h+='<div style="text-align:center"><div style="font-size:8px;color:#888">'+g.hI.a+' L10</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+getL10(g.hId)+'</div></div>';
 h+='<div style="text-align:center"><div style="font-size:8px;color:#888">'+g.aI.a+' L10</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+getL10(g.aId)+'</div></div>';
 h+='</div>';
