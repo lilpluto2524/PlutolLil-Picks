@@ -373,13 +373,14 @@ function nflTeamImg(id){return'<img class="tm-logo" src="https://a.espncdn.com/i
 function getGameSlot(dateStr){
 if(!dateStr)return'EARLY';
 var d=new Date(dateStr);
-var day=d.getUTCDay();
-var hour=d.getUTCHours();
+var et=new Date(d.toLocaleString('en-US',{timeZone:'America/New_York'}));
+var day=et.getDay();
+var hour=et.getHours();
 if(day===4)return'TNF';
 if(day===6)return'SAT';
 if(day===1)return'MNF';
-if(hour>=22||hour<1)return'SNF';
-if(hour>=20)return'LATE';
+if(hour>=20)return'SNF';
+if(hour>=16)return'LATE';
 return'EARLY';
 }
 
