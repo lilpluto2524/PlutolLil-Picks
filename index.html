@@ -200,6 +200,145 @@ body.light .bx{border-color:rgba(0,0,0,.06);}
 .prop-body{flex-wrap:wrap;}
 }
 
+/* ===== MOBILE RESPONSIVE — Roster & Injury Panels ===== */
+@media screen and (max-width: 768px) {
+  /* Game cards full width */
+  .gc {
+    width: 100% !important;
+    min-width: unset !important;
+    max-width: 100% !important;
+    margin: 6px 0 !important;
+    padding: 8px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Roster & Injury panels — scrollable horizontally */
+  .gc div[id^="ros-"], .gc div[id^="inj-"] {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 6px 4px !important;
+  }
+
+  /* Tables inside roster/injury panels */
+  .gc div[id^="ros-"] table, .gc div[id^="inj-"] table {
+    min-width: 500px !important;
+    font-size: 10px !important;
+  }
+
+  /* Bump up font sizes for readability */
+  .gc div[id^="ros-"] td, .gc div[id^="inj-"] td {
+    padding: 4px 3px !important;
+    font-size: 10px !important;
+    line-height: 1.4 !important;
+  }
+
+  .gc div[id^="ros-"] tr td:first-child,
+  .gc div[id^="inj-"] tr td:first-child {
+    white-space: nowrap !important;
+  }
+
+  /* Player names don't wrap */
+  .gc div[id^="ros-"] td:nth-child(2),
+  .gc div[id^="inj-"] td:nth-child(2) {
+    white-space: nowrap !important;
+    max-width: 140px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  /* Header row styling */
+  .gc div[id^="ros-"] tr:first-child td,
+  .gc div[id^="inj-"] tr:first-child td {
+    font-size: 9px !important;
+    padding: 3px 2px !important;
+    white-space: nowrap !important;
+  }
+
+  /* Stat cells — prevent wrapping */
+  .gc div[id^="ros-"] td[style*="text-align:center"],
+  .gc div[id^="inj-"] td[style*="text-align:center"] {
+    white-space: nowrap !important;
+    padding: 4px 4px !important;
+  }
+
+  /* Season/avg stacked display — more spacing */
+  .gc div[id^="ros-"] td span[style*="font-size:7px"] {
+    font-size: 8px !important;
+    display: block !important;
+    margin-top: 1px !important;
+  }
+
+  /* Buttons row — stack or wrap nicely */
+  .gc .xb {
+    font-size: 10px !important;
+    padding: 6px 8px !important;
+    margin: 2px !important;
+  }
+
+  /* Collapsible panels — full width */
+  .gc div[style*="max-height"] {
+    max-height: 400px !important;
+  }
+
+  /* Position group headers */
+  .gc div[id^="ros-"] div[style*="font-weight:700"][style*="color:#ffd54f"] {
+    font-size: 11px !important;
+    margin: 8px 0 4px !important;
+  }
+
+  /* Team header */
+  .gc div[id^="ros-"] div[style*="font-weight:800"][style*="color:#89CFF0"] {
+    font-size: 13px !important;
+  }
+
+  /* Injury tab panels */
+  #tp-ij .trk table {
+    min-width: 100% !important;
+    font-size: 10px !important;
+  }
+
+  #tp-ij .trk td {
+    padding: 4px 3px !important;
+    line-height: 1.4 !important;
+  }
+
+  /* Props tab */
+  #tp-pp table {
+    font-size: 10px !important;
+  }
+
+  #tp-pp td, #tp-pp th {
+    padding: 4px 3px !important;
+  }
+}
+
+/* ===== SMALL PHONES (under 420px) ===== */
+@media screen and (max-width: 420px) {
+  .gc div[id^="ros-"] table, .gc div[id^="inj-"] table {
+    font-size: 9px !important;
+  }
+
+  .gc div[id^="ros-"] td, .gc div[id^="inj-"] td {
+    padding: 3px 2px !important;
+    font-size: 9px !important;
+  }
+
+  .gc div[id^="ros-"] td:nth-child(2),
+  .gc div[id^="inj-"] td:nth-child(2) {
+    max-width: 110px !important;
+  }
+
+  .gc .xb {
+    font-size: 9px !important;
+    padding: 5px 6px !important;
+  }
+
+  /* Stack season total and avg vertically with more room */
+  .gc div[id^="ros-"] td span[style*="font-size:7px"] {
+    font-size: 7px !important;
+  }
+}
+
 </style>
 </head>
 <body>
