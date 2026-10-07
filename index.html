@@ -199,6 +199,7 @@ body.light .bx{border-color:rgba(0,0,0,.06);}
 .tab{padding:5px 8px;font-size:9px;}
 .prop-body{flex-wrap:wrap;}
 }
+
 </style>
 </head>
 <body>
@@ -2073,6 +2074,7 @@ el.innerHTML='<div class="er">Error loading NFL games: '+e.message+'</div>';
 /* ===== PlutoLil Picks v9.3 — Part 8: All Tab Renderers ===== */
 
 /* --- Tracker Tab --- */
+
 function renderTracker(){
 var el=document.getElementById('tp-tk');
 var trk=SPORT==='mlb'?Trk:nflTrk;
@@ -2110,6 +2112,9 @@ h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:#66bb
 h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:#ffd54f">'+ouMW+'-'+ouML+'</div><div style="font-size:8px;color:#888">MED CONF</div></div>';
 h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:#ef5350">'+ouLW+'-'+ouLL+'</div><div style="font-size:8px;color:#888">LOW CONF</div></div>';
 h+='</div></div>';
+
+/* === YRFI / NRFI — MLB ONLY === */
+if(SPORT==='mlb'){
 h+='<div class="trk-sec"><div class="trk-sec-title">YRFI Confidence</div>';
 var yHW=0,yHL=0,yLW=0,yLL=0;
 trk.d.p.forEach(function(e){if(e.bl&&e.bl.fiType==='YRFI'){var c=e.bl.fiConf||'LOW';if(c==='HIGH'){if(e.bl.fiW)yHW++;else if(e.bl.fiW===false)yHL++;}else{if(e.bl.fiW)yLW++;else if(e.bl.fiW===false)yLL++;}}});
@@ -2124,6 +2129,9 @@ h+='<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">';
 h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:#66bb6a">'+nHW+'-'+nHL+'</div><div style="font-size:8px;color:#888">HIGH CONF</div></div>';
 h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:#ef5350">'+nLW+'-'+nLL+'</div><div style="font-size:8px;color:#888">LOW CONF</div></div>';
 h+='</div></div>';
+}
+
+/* === Bet Type Records === */
 h+='<div class="trk-sec"><div class="trk-sec-title">Bet Type Records</div>';
 var spTW=0,spTL=0,ouTW=0,ouTL=0,fiTW=0,fiTL=0;
 trk.d.p.forEach(function(e){if(e.bl){if(e.bl.spW===true)spTW++;else if(e.bl.spW===false)spTL++;if(e.bl.ouW===true)ouTW++;else if(e.bl.ouW===false)ouTL++;if(e.bl.fiW===true)fiTW++;else if(e.bl.fiW===false)fiTL++;}});
@@ -2133,8 +2141,11 @@ var fiPct=fiTW+fiTL>0?Math.round(fiTW/(fiTW+fiTL)*100):0;
 h+='<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">';
 h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:'+(spPct>=55?'#66bb6a':'#ef5350')+'">'+spTW+'-'+spTL+'</div><div style="font-size:10px;color:#89CFF0;font-weight:800">'+spPct+'%</div><div style="font-size:8px;color:#888">SPREADS</div></div>';
 h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:'+(ouPct>=55?'#66bb6a':'#ef5350')+'">'+ouTW+'-'+ouTL+'</div><div style="font-size:10px;color:#89CFF0;font-weight:800">'+ouPct+'%</div><div style="font-size:8px;color:#888">OVER/UNDER</div></div>';
+if(SPORT==='mlb'){
 h+='<div class="conf-box"><div style="font-size:14px;font-weight:800;color:'+(fiPct>=55?'#66bb6a':'#ef5350')+'">'+fiTW+'-'+fiTL+'</div><div style="font-size:10px;color:#89CFF0;font-weight:800">'+fiPct+'%</div><div style="font-size:8px;color:#888">YRFI/NRFI</div></div>';
+}
 h+='</div></div>';
+
 h+='<div class="trk-sec"><div class="trk-sec-title">Recent Picks</div>';
 var recent=trk.d.p.slice().reverse().slice(0,30);
 recent.forEach(function(e){
@@ -3668,62 +3679,272 @@ iPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="f
 });
 },2000);
 
-/* ===== NFL PROPS TAB ===== */
-function renderNFLPropsTab(){
+
+/* ===== NFL PROPS TAB — ANYTIME TD MODEL ===== */
+
+function calcAnytimeTDProb(player,teamRzPct,oppPapg){
+/* Factor 1: TD Rate (35%) — TDs per game */
+var totalTDs=0;
+var gp=player.gamesPlayed||1;
+var carries=0,targets=0;
+
+/* Count TDs from all stat categories */
+if(player.statCats){
+if(player.statCats.rushing){
+var rt=player.statCats.rushing.totals||[];
+/* rushing: CAR, YDS, AVG, TD, LONG */
+if(rt[3])totalTDs+=(rt[3].type==='frac'?rt[3].num:rt[3].val)||0;
+if(rt[0])carries=(rt[0].type==='frac'?rt[0].num:rt[0].val)||0;
+}
+if(player.statCats.receiving){
+var rc=player.statCats.receiving.totals||[];
+/* receiving: REC, YDS, AVG, TD, LONG, TGTS */
+if(rc[3])totalTDs+=(rc[3].type==='frac'?rc[3].num:rc[3].val)||0;
+if(rc[5])targets=(rc[5].type==='frac'?rc[5].num:rc[5].val)||0;
+else if(rc[0])targets=(rc[0].type==='frac'?rc[0].num:rc[0].val)||0;
+}
+if(player.statCats.passing){
+var pt=player.statCats.passing.totals||[];
+/* passing: C/ATT, YDS, AVG, TD, INT, SACKS, QBR, RTG */
+if(pt[3])totalTDs+=(pt[3].type==='frac'?pt[3].num:pt[3].val)||0;
+/* QBs also rush — add rushing TDs if not already counted */
+}
+}
+
+var tdRate=totalTDs/gp;
+var tdRateScore=Math.min(tdRate/1.5,1)*0.35;
+
+/* Factor 2: Opportunity Score (25%) — touches per game */
+var touchesPerGame=(carries+targets)/gp;
+var oppScore=Math.min(touchesPerGame/20,1)*0.25;
+
+/* Factor 3: Red Zone Factor (20%) — team's RZ scoring % */
+var rzScore=(teamRzPct||55)/100*0.20;
+
+/* Factor 4: Starter Boost (10%) */
+var starterScore=player.starter?0.10:player.depth<=2?0.05:0.01;
+
+/* Factor 5: Matchup Factor (10%) — opponent allows more points = more TD opportunity */
+var matchupScore=Math.min((oppPapg||22)/30,1)*0.10;
+
+/* Combine all factors */
+var rawProb=tdRateScore+oppScore+rzScore+starterScore+matchupScore;
+
+/* Scale to realistic probability (cap at 85%, floor at 2%) */
+var prob=Math.max(0.02,Math.min(0.85,rawProb));
+
+/* Confidence based on sample size */
+var confidence=gp>=4?'HIGH':gp>=2?'MED':'LOW';
+
+return{
+prob:prob,
+tdRate:tdRate,
+totalTDs:totalTDs,
+touchesPerGame:touchesPerGame,
+gamesPlayed:gp,
+confidence:confidence
+};
+}
+
+async function renderNFLPropsTab(){
 var el=document.getElementById('tp-pp');
 if(!el)return;
-el.innerHTML='<div class="ld"><div class="spin"></div> Loading NFL Props...</div>';
-var url='https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week='+NFL_WEEK;
-gfetch(url).then(function(sb){
-if(!sb||!sb.events||sb.events.length===0){el.innerHTML='<div class="no-data">No NFL games this week.</div>';return;}
-var qbs=[];
-var rushers=[];
-var receivers=[];
-sb.events.forEach(function(ev){
-var comp=ev.competitions?ev.competitions.shift():null;
+el.innerHTML='<div class="ld"><div class="spin"></div> Building Anytime TD Model...</div>';
+
+try{
+/* Get this week's games from scoreboard */
+var sb=await fetch('https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week='+NFL_WEEK+'&seasontype=2').then(function(r){return r.json();});
+if(!sb||!sb.events||sb.events.length===0){
+el.innerHTML='<div class="no-data">No NFL games this week.</div>';
+return;
+}
+
+/* Collect all team IDs playing this week */
+var matchups=[];
+(sb.events||[]).forEach(function(ev){
+var comp=ev.competitions&&ev.competitions[0];
 if(!comp)return;
-comp.competitors.forEach(function(team){
-var abbr=(team.team.abbreviation||'').toUpperCase();
-var opp='';
-comp.competitors.forEach(function(t2){if(t2.id!==team.id)opp=(t2.team.abbreviation||'').toUpperCase();});
-var leaders=team.leaders||[];
-leaders.forEach(function(cat){
-var name=cat.leaders&&cat.leaders.length>0?cat.leaders.shift().displayName:'TBD';
-var val=cat.leaders&&cat.leaders.length>0?cat.leaders.shift().value:0;
-if(cat.name==='passingYards')qbs.push({name:name,team:abbr,opp:opp,stat:'Pass Yds',val:val});
-if(cat.name==='rushingYards')rushers.push({name:name,team:abbr,opp:opp,stat:'Rush Yds',val:val});
-if(cat.name==='receivingYards')receivers.push({name:name,team:abbr,opp:opp,stat:'Rec Yds',val:val});
+var home=null,away=null;
+(comp.competitors||[]).forEach(function(c){
+var info={id:c.team.id,abbr:c.team.abbreviation,name:c.team.displayName||c.team.name,logo:c.team.logo||''};
+if(c.homeAway==='home')home=info;
+else away=info;
+});
+if(home&&away)matchups.push({home:home,away:away,gameTime:ev.date||''});
+});
+
+/* Fetch rosters + stats for all teams in parallel */
+var allTeamIds=[];
+matchups.forEach(function(m){
+if(allTeamIds.indexOf(m.home.id)<0)allTeamIds.push(m.home.id);
+if(allTeamIds.indexOf(m.away.id)<0)allTeamIds.push(m.away.id);
+});
+
+el.innerHTML='<div class="ld"><div class="spin"></div> Crunching stats for '+allTeamIds.length+' teams...</div>';
+
+/* Fetch team stats + rosters in parallel */
+var teamStatsMap={};
+var teamRosterMap={};
+await Promise.all(allTeamIds.map(async function(tid){
+var results=await Promise.all([
+nflGetTeamStats(tid).catch(function(){return{ppg:22,papg:22,rzPct:55};}),
+fetchNFLRoster(tid).catch(function(){return{qb:[],rb:[],wr:[],te:[],k:[],p:[],gamesPlayed:0};})
+]);
+teamStatsMap[tid]=results[0];
+teamRosterMap[tid]=results[1];
+}));
+
+/* Build TD predictions for each matchup */
+var allPlayers=[];
+
+matchups.forEach(function(m){
+var homeStats=teamStatsMap[m.home.id]||{};
+var awayStats=teamStatsMap[m.away.id]||{};
+var homeRoster=teamRosterMap[m.home.id]||{};
+var awayRoster=teamRosterMap[m.away.id]||{};
+
+/* Score-eligible positions */
+var posKeys=['qb','rb','wr','te'];
+
+/* Home team players vs away defense */
+posKeys.forEach(function(pk){
+(homeRoster[pk]||[]).forEach(function(p){
+if(!p.statCats||Object.keys(p.statCats).length===0)return;
+var td=calcAnytimeTDProb(p,homeStats.rzPct,awayStats.papg);
+if(td.totalTDs>0||td.touchesPerGame>=3){
+allPlayers.push({
+name:p.name,
+num:p.num,
+pos:p.pos,
+team:m.home.abbr,
+opp:m.away.abbr,
+matchup:m.home.abbr+' vs '+m.away.abbr,
+starter:p.starter,
+depth:p.depth,
+prob:td.prob,
+tdRate:td.tdRate,
+totalTDs:td.totalTDs,
+touches:td.touchesPerGame,
+gp:td.gamesPlayed,
+confidence:td.confidence
+});
+}
+});
+});
+
+/* Away team players vs home defense */
+posKeys.forEach(function(pk){
+(awayRoster[pk]||[]).forEach(function(p){
+if(!p.statCats||Object.keys(p.statCats).length===0)return;
+var td=calcAnytimeTDProb(p,awayStats.rzPct,homeStats.papg);
+if(td.totalTDs>0||td.touchesPerGame>=3){
+allPlayers.push({
+name:p.name,
+num:p.num,
+pos:p.pos,
+team:m.away.abbr,
+opp:m.home.abbr,
+matchup:m.away.abbr+' @ '+m.home.abbr,
+starter:p.starter,
+depth:p.depth,
+prob:td.prob,
+tdRate:td.tdRate,
+totalTDs:td.totalTDs,
+touches:td.touchesPerGame,
+gp:td.gamesPlayed,
+confidence:td.confidence
+});
+}
 });
 });
 });
+
+/* Sort by probability descending */
+allPlayers.sort(function(a,b){return b.prob-a.prob;});
+
+/* Render the props tab */
 var h='<div style="padding:8px">';
-h+='<div style="font-size:14px;font-weight:900;color:#89CFF0;margin-bottom:8px">NFL Player Props — Week '+NFL_WEEK+'</div>';
-h+='<div style="font-size:11px;font-weight:800;color:#ffd54f;margin:8px 0 4px">Top QBs (Passing Yards)</div>';
-h+='<table style="width:100%;font-size:10px;border-collapse:collapse">';
-h+='<tr style="color:#89CFF0"><th style="text-align:left;padding:2px">Player</th><th>Team</th><th>vs</th><th>Pass Yds</th></tr>';
-qbs.sort(function(a,b){return b.val-a.val;});
-qbs.forEach(function(p){
-h+='<tr style="border-bottom:1px solid rgba(137,207,240,.1)"><td style="padding:2px">'+p.name+'</td><td style="text-align:center">'+p.team+'</td><td style="text-align:center">'+p.opp+'</td><td style="text-align:center;color:#66bb6a">'+p.val+'</td></tr>';
+h+='<div style="font-size:14px;font-weight:900;color:#89CFF0;margin-bottom:4px">🏈 NFL Anytime TD Predictions — Week '+NFL_WEEK+'</div>';
+h+='<div style="font-size:9px;color:#888;margin-bottom:8px">Model: TD Rate (35%) + Opportunity (25%) + Red Zone (20%) + Starter (10%) + Matchup (10%)</div>';
+
+/* Top 25 overall */
+h+='<div style="font-size:11px;font-weight:800;color:#ffd54f;margin:8px 0 4px">🔥 Top 25 Anytime TD Scorers</div>';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#89CFF0;font-weight:600;border-bottom:1px solid rgba(137,207,240,.15)">';
+h+='<td style="padding:3px">#</td><td>Player</td><td style="text-align:center">Pos</td><td style="text-align:center">Team</td><td style="text-align:center">vs</td>';
+h+='<td style="text-align:center">TD%</td><td style="text-align:center">TD/G</td><td style="text-align:center">TDs</td><td style="text-align:center">TCH/G</td><td style="text-align:center">GP</td><td style="text-align:center">Conf</td></tr>';
+
+allPlayers.slice(0,25).forEach(function(p,i){
+var bg=i%2===0?'rgba(137,207,240,.02)':'transparent';
+var probPct=(p.prob*100).toFixed(1);
+var probColor=p.prob>=0.55?'#66bb6a':p.prob>=0.35?'#ffd54f':p.prob>=0.20?'#ffa726':'#ef5350';
+var confColor=p.confidence==='HIGH'?'#66bb6a':p.confidence==='MED'?'#ffd54f':'#ef5350';
+var starBadge=p.starter?'<span style="color:#ffd54f;font-size:7px"> ★</span>':'';
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.05);background:'+bg+'">';
+h+='<td style="padding:3px;color:#888">'+(i+1)+'</td>';
+h+='<td style="font-weight:600">'+p.name+starBadge+'</td>';
+h+='<td style="text-align:center">'+p.pos+'</td>';
+h+='<td style="text-align:center">'+p.team+'</td>';
+h+='<td style="text-align:center;color:#888">'+p.opp+'</td>';
+h+='<td style="text-align:center;font-weight:800;color:'+probColor+'">'+probPct+'%</td>';
+h+='<td style="text-align:center">'+p.tdRate.toFixed(2)+'</td>';
+h+='<td style="text-align:center;color:#89CFF0">'+p.totalTDs+'</td>';
+h+='<td style="text-align:center">'+p.touches.toFixed(1)+'</td>';
+h+='<td style="text-align:center">'+p.gp+'</td>';
+h+='<td style="text-align:center;color:'+confColor+';font-weight:700;font-size:7px">'+p.confidence+'</td>';
+h+='</tr>';
 });
 h+='</table>';
-h+='<div style="font-size:11px;font-weight:800;color:#ffd54f;margin:8px 0 4px">Top Rushers (Rushing Yards)</div>';
-h+='<table style="width:100%;font-size:10px;border-collapse:collapse">';
-h+='<tr style="color:#89CFF0"><th style="text-align:left;padding:2px">Player</th><th>Team</th><th>vs</th><th>Rush Yds</th></tr>';
-rushers.sort(function(a,b){return b.val-a.val;});
-rushers.forEach(function(p){
-h+='<tr style="border-bottom:1px solid rgba(137,207,240,.1)"><td style="padding:2px">'+p.name+'</td><td style="text-align:center">'+p.team+'</td><td style="text-align:center">'+p.opp+'</td><td style="text-align:center;color:#66bb6a">'+p.val+'</td></tr>';
+
+/* Breakdown by position */
+var positions=[
+{label:'🎯 QB Anytime TD',pos:'QB'},
+{label:'🏃 RB Anytime TD',pos:['RB','FB']},
+{label:'🖐️ WR Anytime TD',pos:'WR'},
+{label:'🤲 TE Anytime TD',pos:'TE'}
+];
+
+positions.forEach(function(section){
+var filtered=allPlayers.filter(function(p){
+if(Array.isArray(section.pos))return section.pos.indexOf(p.pos)>=0;
+return p.pos===section.pos;
+});
+if(filtered.length===0)return;
+
+h+='<div style="font-size:11px;font-weight:800;color:#ffd54f;margin:12px 0 4px">'+section.label+'</div>';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#89CFF0;font-weight:600;border-bottom:1px solid rgba(137,207,240,.15)">';
+h+='<td style="padding:3px">#</td><td>Player</td><td style="text-align:center">Team</td><td style="text-align:center">vs</td>';
+h+='<td style="text-align:center">TD%</td><td style="text-align:center">TD/G</td><td style="text-align:center">TDs</td><td style="text-align:center">TCH/G</td><td style="text-align:center">GP</td></tr>';
+
+filtered.slice(0,15).forEach(function(p,i){
+var bg=i%2===0?'rgba(137,207,240,.02)':'transparent';
+var probPct=(p.prob*100).toFixed(1);
+var probColor=p.prob>=0.55?'#66bb6a':p.prob>=0.35?'#ffd54f':p.prob>=0.20?'#ffa726':'#ef5350';
+var starBadge=p.starter?'<span style="color:#ffd54f;font-size:7px"> ★</span>':'';
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.05);background:'+bg+'">';
+h+='<td style="padding:3px;color:#888">'+(i+1)+'</td>';
+h+='<td style="font-weight:600">'+p.name+starBadge+'</td>';
+h+='<td style="text-align:center">'+p.team+'</td>';
+h+='<td style="text-align:center;color:#888">'+p.opp+'</td>';
+h+='<td style="text-align:center;font-weight:800;color:'+probColor+'">'+probPct+'%</td>';
+h+='<td style="text-align:center">'+p.tdRate.toFixed(2)+'</td>';
+h+='<td style="text-align:center;color:#89CFF0">'+p.totalTDs+'</td>';
+h+='<td style="text-align:center">'+p.touches.toFixed(1)+'</td>';
+h+='<td style="text-align:center">'+p.gp+'</td>';
+h+='</tr>';
 });
 h+='</table>';
-h+='<div style="font-size:11px;font-weight:800;color:#ffd54f;margin:8px 0 4px">Top Receivers (Receiving Yards)</div>';
-h+='<table style="width:100%;font-size:10px;border-collapse:collapse">';
-h+='<tr style="color:#89CFF0"><th style="text-align:left;padding:2px">Player</th><th>Team</th><th>vs</th><th>Rec Yds</th></tr>';
-receivers.sort(function(a,b){return b.val-a.val;});
-receivers.forEach(function(p){
-h+='<tr style="border-bottom:1px solid rgba(137,207,240,.1)"><td style="padding:2px">'+p.name+'</td><td style="text-align:center">'+p.team+'</td><td style="text-align:center">'+p.opp+'</td><td style="text-align:center;color:#66bb6a">'+p.val+'</td></tr>';
 });
-h+='</table></div>';
+
+h+='<div style="font-size:8px;color:#555;margin-top:12px;text-align:center">PlutoLil Picks v9.3 — Anytime TD Model | Data: ESPN | Updated: '+new Date().toLocaleString()+'</div>';
+h+='</div>';
 el.innerHTML=h;
-});
+
+}catch(e){
+console.warn('Props tab error:',e);
+el.innerHTML='<div class="no-data">Error loading props: '+e.message+'</div>';
+}
 }
 
 
