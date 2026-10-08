@@ -1172,7 +1172,7 @@ fetch('https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/teams/'+te
 var statData=results[0];
 var teamData=results[1];
 
-var stats={ppg:22,papg:22,ypg:340,yapg:340,rushYpg:120,passYpg:220,turnovers:15,thirdPct:40,rzPct:55,sacks:30,penYpg:50,streak:0,pdiff:0,dvoa:0,sos:0.5,rest:7,w:0,l:0};
+var stats={ppg:22,papg:22,ypg:340,yapg:340,passYapg:230,rushYapg:110,rushYpg:120,passYpg:220,turnovers:15,thirdPct:40,rzPct:55,sacks:30,penYpg:50,streak:0,pdiff:0,dvoa:0,sos:0.5,rest:7,w:0,l:0};
 var gamesPlayed=4;
 
 /* --- Parse team statistics (exact ESPN stat names) --- */
@@ -1190,8 +1190,15 @@ if(n==='teamGamesPlayed'&&v>0)gamesPlayed=v;
 /* Offensive stats (from passing/rushing categories) */
 if(n==='totalPointsPerGame')stats.ppg=v;
 if(n==='yardsPerGame')stats.ypg=v;
-if(n==='rushingYardsPerGame')stats.rushYpg=v;
-if(n==='netPassingYardsPerGame')stats.passYpg=v;
+if(n==='rushingYardsPerGame'&&catName!=='defensive')stats.rushYpg=v;
+if(n==='netPassingYardsPerGame'&&catName!=='defensive')stats.passYpg=v;
+
+/* NEW: Defensive run/pass splits (yards ALLOWED per game) */
+if(catName==='defensive'){
+if(n==='passingYardsPerGame'||n==='netPassingYardsPerGame'||n==='passingYardsPerGameAllowed')stats.passYapg=v;
+if(n==='rushingYardsPerGame'||n==='rushingYardsPerGameAllowed')stats.rushYapg=v;
+if(n==='yardsPerGame'||n==='totalYardsPerGameAllowed')stats.yapg=v;
+}
 
 /* Miscellaneous */
 if(n==='thirdDownConvPct')stats.thirdPct=v;
@@ -1236,6 +1243,15 @@ stats.yapg=340*(stats.papg/22);
 
 /* Calculate rest days (approximate from schedule) */
 /* Default to 7 if we can't determine */
+/* NEW: Fallback for defensive splits if ESPN didn't provide them */
+if(stats.passYapg===230&&stats.rushYapg===110&&stats.papg!==22){
+var scale=stats.papg/22;
+stats.passYapg=230*scale;
+stats.rushYapg=110*scale;
+}
+/* Guard rails — keep splits in a sane NFL range */
+stats.passYapg=Math.max(140,Math.min(330,stats.passYapg));
+stats.rushYapg=Math.max(70,Math.min(190,stats.rushYapg));
 stats.rest=7;
 
 /* Strength of schedule from point differential */
@@ -1950,8 +1966,8 @@ var hI=NFL[pg.hId]||{n:'Unknown',a:'UNK',clr:'#888',lat:40,lon:-74};
 var aI=NFL[pg.aId]||{n:'Unknown',a:'UNK',clr:'#888',lat:40,lon:-74};
 
 var results=await Promise.all([
-nflGetTeamStats(pg.hId).catch(function(){return{ppg:22,papg:22,ypg:340,yapg:340,rushYpg:120,passYpg:220,turnovers:15,thirdPct:40,rzPct:55,sacks:30,penYpg:50,streak:0,pdiff:0,dvoa:0,sos:0.5,rest:7,w:0,l:0};}),
-nflGetTeamStats(pg.aId).catch(function(){return{ppg:22,papg:22,ypg:340,yapg:340,rushYpg:120,passYpg:220,turnovers:15,thirdPct:40,rzPct:55,sacks:30,penYpg:50,streak:0,pdiff:0,dvoa:0,sos:0.5,rest:7,w:0,l:0};}),
+nflGetTeamStats(pg.hId).catch(function(){return{ppg:22,papg:22,ypg:340,yapg:340,passYapg:230,rushYapg:110,rushYpg:120,passYpg:220,turnovers:15,thirdPct:40,rzPct:55,sacks:30,penYpg:50,streak:0,pdiff:0,dvoa:0,sos:0.5,rest:7,w:0,l:0};}),
+nflGetTeamStats(pg.aId).catch(function(){return{ppg:22,papg:22,ypg:340,yapg:340,passYapg:230,rushYapg:110,rushYpg:120,passYpg:220,turnovers:15,thirdPct:40,rzPct:55,sacks:30,penYpg:50,streak:0,pdiff:0,dvoa:0,sos:0.5,rest:7,w:0,l:0};}),
 getWeather(hI.lat,hI.lon).catch(function(){return null;})
 ]);
 
@@ -3656,7 +3672,7 @@ if(m){var t=m.pop();if(teams.indexOf(t)<0)teams.push(t);}
 return teams;
 }
 
-function renderGameTDPanel(roster,teamAbbr,oppPapg,teamRzPct,type){
+function renderGameTDPanel(roster,teamAbbr,oppPapg,teamRzPct,type,oppDef){
 var posKeys=['qb','rb','wr','te'];
 var players=[];
 posKeys.forEach(function(pk){
@@ -3664,12 +3680,12 @@ posKeys.forEach(function(pk){
 if(!p.statCats||Object.keys(p.statCats).length===0)return;
 var td;
 if(type==='first'){
-td=calcFirstTDProb(p,teamRzPct,oppPapg);
+td=calcFirstTDProb(p,teamRzPct,oppPapg,oppDef);
 if(td.totalTDs>0||td.touchesPerGame>=5){
 players.push({name:p.name,pos:p.pos,starter:p.starter,prob:td.prob,tdRate:td.tdRate,totalTDs:td.totalTDs,touches:td.touchesPerGame,impliedOdds:td.impliedOdds,gp:td.gamesPlayed});
 }
 }else{
-td=calcAnytimeTDProb(p,teamRzPct,oppPapg);
+td=calcAnytimeTDProb(p,teamRzPct,oppPapg,oppDef);
 if(td.totalTDs>0||td.touchesPerGame>=3){
 players.push({name:p.name,pos:p.pos,starter:p.starter,prob:td.prob,tdRate:td.tdRate,totalTDs:td.totalTDs,touches:td.touchesPerGame,gp:td.gamesPlayed,confidence:td.confidence});
 }
@@ -3822,7 +3838,7 @@ nflGetTeamStats(hid).catch(function(){return{rzPct:55,papg:22};}),
 nflGetTeamStats(aid).catch(function(){return{rzPct:55,papg:22};})
 ]).then(function(r){
 var hr=r[0];var ar=r[1];var hStats=r[2];var aStats=r[3];
-atdPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+renderGameTDPanel(hr,hA,aStats.papg,hStats.rzPct,'anytime')+'</div><div style="flex:1;min-width:140px">'+renderGameTDPanel(ar,aA,hStats.papg,aStats.rzPct,'anytime')+'</div></div>';
+atdPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+renderGameTDPanel(hr,hA,aStats.papg,hStats.rzPct,'anytime',{passYapg:aStats.passYapg,rushYapg:aStats.rushYapg})+'</div><div style="flex:1;min-width:140px">'+renderGameTDPanel(ar,aA,hStats.papg,aStats.rzPct,'anytime',{passYapg:hStats.passYapg,rushYapg:hStats.rushYapg})+'</div></div>';
 });
 });
 
@@ -3837,7 +3853,7 @@ nflGetTeamStats(hid).catch(function(){return{rzPct:55,papg:22};}),
 nflGetTeamStats(aid).catch(function(){return{rzPct:55,papg:22};})
 ]).then(function(r){
 var hr=r[0];var ar=r[1];var hStats=r[2];var aStats=r[3];
-ftdPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+renderGameTDPanel(hr,hA,aStats.papg,hStats.rzPct,'first')+'</div><div style="flex:1;min-width:140px">'+renderGameTDPanel(ar,aA,hStats.papg,aStats.rzPct,'first')+'</div></div>';
+ftdPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+renderGameTDPanel(hr,hA,aStats.papg,hStats.rzPct,'first',{passYapg:aStats.passYapg,rushYapg:aStats.rushYapg})+'</div><div style="flex:1;min-width:140px">'+renderGameTDPanel(ar,aA,hStats.papg,aStats.rzPct,'first',{passYapg:hStats.passYapg,rushYapg:hStats.rushYapg})+'</div></div>';
 });
 });
 ppBtn.addEventListener('click',function(){if(ppPanel.style.display==='block'){ppPanel.style.display='none';return;}ppPanel.style.display='block';ppPanel.innerHTML='<div class="ld"><div class="spin"></div> Loading Props...</div>';Promise.all([fetchNFLRoster(hid),fetchNFLRoster(aid),nflGetTeamStats(hid).catch(function(){return{papg:22,yapg:340};}),nflGetTeamStats(aid).catch(function(){return{papg:22,yapg:340};})]).then(function(r){var hr=r[0];var ar=r[1];var hStats=r[2];var aStats=r[3];ppPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+renderPlayerPropsPanel(hr,hA,hStats,aStats)+'</div><div style="flex:1;min-width:140px">'+renderPlayerPropsPanel(ar,aA,aStats,hStats)+'</div></div>';});});
@@ -3910,11 +3926,12 @@ var kickPtsPg=kickPts/gp;
 /* Matchup adjustment factor */
 /* If opponent allows more than average, boost projection; if less, reduce */
 var oppPapg=oppStats.papg||22;
-var oppYapg=oppStats.yapg||340;
+var oppPassYapg=oppStats.passYapg||230;
+var oppRushYapg=oppStats.rushYapg||110;
 var leagueAvgPts=22;
-var leagueAvgYds=340;
 var ptsMultiplier=oppPapg>0?(oppPapg/leagueAvgPts):1;
-var ydsMultiplier=oppYapg>0?(oppYapg/leagueAvgYds):1;
+var passMult=oppPassYapg>0?(oppPassYapg/230):1;
+var rushMult=oppRushYapg>0?(oppRushYapg/110):1;
 
 /* Blend: 70% season avg + 30% matchup adjusted */
 var matchBlend=function(avg,multiplier){return avg*0.70+avg*multiplier*0.30;};
@@ -3923,26 +3940,26 @@ var matchBlend=function(avg,multiplier){return avg*0.70+avg*multiplier*0.30;};
 props.lines=[];
 
 if(player.pos==='QB'){
-props.lines.push({prop:'Pass Yds',avg:passYpg,projected:matchBlend(passYpg,ydsMultiplier),season:passYds,gp:gp});
-props.lines.push({prop:'Pass TDs',avg:passTDpg,projected:matchBlend(passTDpg,ptsMultiplier),season:passTDs,gp:gp});
-props.lines.push({prop:'Completions',avg:compPg,projected:matchBlend(compPg,ydsMultiplier),season:comps,gp:gp});
+props.lines.push({prop:'Pass Yds',avg:passYpg,projected:matchBlend(passYpg,passMult),season:passYds,gp:gp});
+props.lines.push({prop:'Pass TDs',avg:passTDpg,projected:matchBlend(passTDpg,passMult),season:passTDs,gp:gp});
+props.lines.push({prop:'Completions',avg:compPg,projected:matchBlend(compPg,passMult),season:comps,gp:gp});
 props.lines.push({prop:'INTs',avg:intPg,projected:intPg,season:ints,gp:gp});
-props.lines.push({prop:'Rush Yds',avg:rushYpg,projected:matchBlend(rushYpg,ydsMultiplier),season:rushYds,gp:gp});
+props.lines.push({prop:'Rush Yds',avg:rushYpg,projected:matchBlend(rushYpg,rushMult),season:rushYds,gp:gp});
 }
 else if(player.pos==='RB'||player.pos==='FB'){
-props.lines.push({prop:'Rush Yds',avg:rushYpg,projected:matchBlend(rushYpg,ydsMultiplier),season:rushYds,gp:gp});
+props.lines.push({prop:'Rush Yds',avg:rushYpg,projected:matchBlend(rushYpg,rushMult),season:rushYds,gp:gp});
 props.lines.push({prop:'Receptions',avg:recPg,projected:matchBlend(recPg,1),season:recs,gp:gp});
-props.lines.push({prop:'Rec Yds',avg:recYpg,projected:matchBlend(recYpg,ydsMultiplier),season:recYds,gp:gp});
-props.lines.push({prop:'Total Yds',avg:(rushYpg+recYpg),projected:matchBlend(rushYpg+recYpg,ydsMultiplier),season:rushYds+recYds,gp:gp});
+props.lines.push({prop:'Rec Yds',avg:recYpg,projected:matchBlend(recYpg,passMult),season:recYds,gp:gp});
+props.lines.push({prop:'Total Yds',avg:(rushYpg+recYpg),projected:matchBlend(rushYpg,rushMult)+matchBlend(recYpg,passMult),season:rushYds+recYds,gp:gp});
 }
 else if(player.pos==='WR'){
-props.lines.push({prop:'Rec Yds',avg:recYpg,projected:matchBlend(recYpg,ydsMultiplier),season:recYds,gp:gp});
-props.lines.push({prop:'Receptions',avg:recPg,projected:matchBlend(recPg,1),season:recs,gp:gp});
-props.lines.push({prop:'Targets',avg:tgtPg,projected:matchBlend(tgtPg,1),season:tgts,gp:gp});
+props.lines.push({prop:'Rec Yds',avg:recYpg,projected:matchBlend(recYpg,passMult),season:recYds,gp:gp});
+props.lines.push({prop:'Receptions',avg:recPg,projected:matchBlend(recPg,passMult),season:recs,gp:gp});
+props.lines.push({prop:'Targets',avg:tgtPg,projected:matchBlend(tgtPg,passMult),season:tgts,gp:gp});
 }
 else if(player.pos==='TE'){
-props.lines.push({prop:'Rec Yds',avg:recYpg,projected:matchBlend(recYpg,ydsMultiplier),season:recYds,gp:gp});
-props.lines.push({prop:'Receptions',avg:recPg,projected:matchBlend(recPg,1),season:recs,gp:gp});
+props.lines.push({prop:'Rec Yds',avg:recYpg,projected:matchBlend(recYpg,passMult),season:recYds,gp:gp});
+props.lines.push({prop:'Receptions',avg:recPg,projected:matchBlend(recPg,passMult),season:recs,gp:gp});
 }
 else if(player.pos==='K'||player.pos==='PK'){
 props.lines.push({prop:'FG Made',avg:fgmPg,projected:matchBlend(fgmPg,ptsMultiplier),season:fgm,gp:gp});
@@ -3994,7 +4011,7 @@ return h;
 
 
 
-function calcAnytimeTDProb(player,teamRzPct,oppPapg){
+function calcAnytimeTDProb(player,teamRzPct,oppPapg,oppDef){
 /* Factor 1: TD Rate (35%) — TDs per game */
 var totalTDs=0;
 var gp=player.gamesPlayed||1;
@@ -4054,7 +4071,7 @@ confidence:confidence
 }
 
 
-function calcFirstTDProb(player,teamRzPct,oppPapg){
+function calcFirstTDProb(player,teamRzPct,oppPapg,oppDef){
 var gp=player.gamesPlayed||1;
 var totalTDs=0;
 var carries=0,targets=0,receptions=0;
@@ -4094,7 +4111,17 @@ var posScore=posWeight;
 var starterScore=player.starter?0.15:player.depth<=2?0.05:0.01;
 
 /* Factor 5: Matchup (10%) — weaker defenses give up early scores */
-var matchupScore=Math.min((oppPapg||22)/30,1)*0.10;
+var matchupScore;
+if(oppDef&&(oppDef.passYapg||oppDef.rushYapg)){
+var passD=oppDef.passYapg||230,rushD=oppDef.rushYapg||110,defVal;
+if(player.pos==='WR'||player.pos==='TE')defVal=passD/230;
+else if(player.pos==='RB'||player.pos==='FB')defVal=rushD/110;
+else if(player.pos==='QB')defVal=rushD/110;
+else defVal=(passD/230+rushD/110)/2;
+matchupScore=Math.min(defVal,1.5)/1.5*0.10;
+}else{
+matchupScore=Math.min((oppPapg||22)/30,1)*0.10;
+}
 
 /* Combine factors */
 var rawProb=tdRateScore+usageScore+posScore+starterScore+matchupScore;
