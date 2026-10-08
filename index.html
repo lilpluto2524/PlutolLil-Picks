@@ -200,144 +200,35 @@ body.light .bx{border-color:rgba(0,0,0,.06);}
 .prop-body{flex-wrap:wrap;}
 }
 
-/* ===== MOBILE RESPONSIVE — Roster & Injury Panels ===== */
-@media screen and (max-width: 768px) {
-  /* Game cards full width */
-  .gc {
-    width: 100% !important;
-    min-width: unset !important;
-    max-width: 100% !important;
-    margin: 6px 0 !important;
-    padding: 8px !important;
-    box-sizing: border-box !important;
-  }
 
-  /* Roster & Injury panels — scrollable horizontally */
-  .gc div[id^="ros-"], .gc div[id^="inj-"] {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    padding: 6px 4px !important;
-  }
-
-  /* Tables inside roster/injury panels */
-  .gc div[id^="ros-"] table, .gc div[id^="inj-"] table {
-    min-width: 500px !important;
-    font-size: 10px !important;
-  }
-
-  /* Bump up font sizes for readability */
-  .gc div[id^="ros-"] td, .gc div[id^="inj-"] td {
-    padding: 4px 3px !important;
-    font-size: 10px !important;
-    line-height: 1.4 !important;
-  }
-
-  .gc div[id^="ros-"] tr td:first-child,
-  .gc div[id^="inj-"] tr td:first-child {
-    white-space: nowrap !important;
-  }
-
-  /* Player names don't wrap */
-  .gc div[id^="ros-"] td:nth-child(2),
-  .gc div[id^="inj-"] td:nth-child(2) {
-    white-space: nowrap !important;
-    max-width: 140px !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
-
-  /* Header row styling */
-  .gc div[id^="ros-"] tr:first-child td,
-  .gc div[id^="inj-"] tr:first-child td {
-    font-size: 9px !important;
-    padding: 3px 2px !important;
-    white-space: nowrap !important;
-  }
-
-  /* Stat cells — prevent wrapping */
-  .gc div[id^="ros-"] td[style*="text-align:center"],
-  .gc div[id^="inj-"] td[style*="text-align:center"] {
-    white-space: nowrap !important;
-    padding: 4px 4px !important;
-  }
-
-  /* Season/avg stacked display — more spacing */
-  .gc div[id^="ros-"] td span[style*="font-size:7px"] {
-    font-size: 8px !important;
-    display: block !important;
-    margin-top: 1px !important;
-  }
-
-  /* Buttons row — stack or wrap nicely */
-  .gc .xb {
-    font-size: 10px !important;
-    padding: 6px 8px !important;
-    margin: 2px !important;
-  }
-
-  /* Collapsible panels — full width */
-  .gc div[style*="max-height"] {
-    max-height: 400px !important;
-  }
-
-  /* Position group headers */
-  .gc div[id^="ros-"] div[style*="font-weight:700"][style*="color:#ffd54f"] {
-    font-size: 11px !important;
-    margin: 8px 0 4px !important;
-  }
-
-  /* Team header */
-  .gc div[id^="ros-"] div[style*="font-weight:800"][style*="color:#89CFF0"] {
-    font-size: 13px !important;
-  }
-
-  /* Injury tab panels */
-  #tp-ij .trk table {
-    min-width: 100% !important;
-    font-size: 10px !important;
-  }
-
-  #tp-ij .trk td {
-    padding: 4px 3px !important;
-    line-height: 1.4 !important;
-  }
-
-  /* Props tab */
-  #tp-pp table {
-    font-size: 10px !important;
-  }
-
-  #tp-pp td, #tp-pp th {
-    padding: 4px 3px !important;
-  }
+/* ===== MOBILE RESPONSIVE v2 — Actual Panel Structure ===== */
+@media screen and (max-width:768px){
+.gc{width:100%!important;min-width:unset!important;max-width:100%!important;margin:6px 0!important;padding:8px!important;box-sizing:border-box!important;}
+.gc div[style*="display:flex"][style*="flex-wrap:wrap"]{flex-direction:column!important;gap:4px!important;}
+.gc div[style*="flex:1"][style*="min-width:140px"]{min-width:100%!important;width:100%!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;}
+.gc table{min-width:450px!important;font-size:10px!important;table-layout:auto!important;}
+.gc table td{padding:4px 3px!important;font-size:10px!important;line-height:1.4!important;white-space:nowrap!important;}
+.gc table td:nth-child(2){max-width:130px!important;overflow:hidden!important;text-overflow:ellipsis!important;}
+.gc table tr:first-child td{font-size:9px!important;padding:3px 2px!important;}
+.gc table td span[style*="font-size:7px"]{font-size:8px!important;display:block!important;margin-top:1px!important;}
+.gc .xb{font-size:10px!important;padding:6px 8px!important;margin:2px!important;}
+.gc div[style*="max-height"]{max-height:500px!important;}
+.gc div[style*="font-weight:700"][style*="color:#ffd54f"]{font-size:11px!important;margin:8px 0 4px!important;}
+.gc div[style*="font-weight:800"][style*="color:#89CFF0"]{font-size:13px!important;}
+#tp-ij .trk table{min-width:100%!important;font-size:10px!important;}
+#tp-ij .trk td{padding:4px 3px!important;line-height:1.4!important;}
+#tp-pp table{font-size:10px!important;}
+#tp-pp td,#tp-pp th{padding:4px 3px!important;}
+}
+@media screen and (max-width:420px){
+.gc table{min-width:400px!important;font-size:9px!important;}
+.gc table td{padding:3px 2px!important;font-size:9px!important;}
+.gc table td:nth-child(2){max-width:100px!important;}
+.gc .xb{font-size:9px!important;padding:5px 6px!important;}
+.gc table td span[style*="font-size:7px"]{font-size:7px!important;}
 }
 
-/* ===== SMALL PHONES (under 420px) ===== */
-@media screen and (max-width: 420px) {
-  .gc div[id^="ros-"] table, .gc div[id^="inj-"] table {
-    font-size: 9px !important;
-  }
 
-  .gc div[id^="ros-"] td, .gc div[id^="inj-"] td {
-    padding: 3px 2px !important;
-    font-size: 9px !important;
-  }
-
-  .gc div[id^="ros-"] td:nth-child(2),
-  .gc div[id^="inj-"] td:nth-child(2) {
-    max-width: 110px !important;
-  }
-
-  .gc .xb {
-    font-size: 9px !important;
-    padding: 5px 6px !important;
-  }
-
-  /* Stack season total and avg vertically with more room */
-  .gc div[id^="ros-"] td span[style*="font-size:7px"] {
-    font-size: 7px !important;
-  }
-}
 
 </style>
 </head>
@@ -3752,7 +3643,8 @@ h+='</table>';
 return h;
 }
 
-/* ===== NFL ROSTER/INJURY INJECT (fixed v3) ===== */
+
+/* ===== NFL ROSTER/INJURY/TD INJECT (v4) ===== */
 var espnNFLIds={ari:22,atl:1,bal:33,buf:2,car:29,chi:3,cin:4,cle:5,dal:6,den:7,det:8,gb:9,hou:34,ind:11,jax:30,kc:12,lv:13,lac:24,lar:14,mia:15,min:16,ne:17,no:18,nyg:19,nyj:20,phi:21,pit:23,sf:25,sea:26,tb:27,ten:10,was:28,wsh:28};
 function extractNFLTeams(card){
 var imgs=card.querySelectorAll('img');
@@ -3763,6 +3655,75 @@ if(m){var t=m.pop();if(teams.indexOf(t)<0)teams.push(t);}
 });
 return teams;
 }
+
+function renderGameTDPanel(roster,teamAbbr,oppPapg,teamRzPct,type){
+var posKeys=['qb','rb','wr','te'];
+var players=[];
+posKeys.forEach(function(pk){
+(roster[pk]||[]).forEach(function(p){
+if(!p.statCats||Object.keys(p.statCats).length===0)return;
+var td;
+if(type==='first'){
+td=calcFirstTDProb(p,teamRzPct,oppPapg);
+if(td.totalTDs>0||td.touchesPerGame>=5){
+players.push({name:p.name,pos:p.pos,starter:p.starter,prob:td.prob,tdRate:td.tdRate,totalTDs:td.totalTDs,touches:td.touchesPerGame,impliedOdds:td.impliedOdds,gp:td.gamesPlayed});
+}
+}else{
+td=calcAnytimeTDProb(p,teamRzPct,oppPapg);
+if(td.totalTDs>0||td.touchesPerGame>=3){
+players.push({name:p.name,pos:p.pos,starter:p.starter,prob:td.prob,tdRate:td.tdRate,totalTDs:td.totalTDs,touches:td.touchesPerGame,gp:td.gamesPlayed,confidence:td.confidence});
+}
+}
+});
+});
+players.sort(function(a,b){return b.prob-a.prob;});
+
+var isFirst=type==='first';
+var accent=isFirst?'#ffa726':'#89CFF0';
+var title=isFirst?teamAbbr+' First TD Scorers':teamAbbr+' Anytime TD Scorers';
+
+var h='<div style="font-size:11px;font-weight:800;color:'+accent+';margin-bottom:4px">'+title+'</div>';
+h+='<table style="width:100%;font-size:8px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:'+accent+';font-weight:600;border-bottom:1px solid rgba(137,207,240,.1)">';
+h+='<td style="padding:2px">#</td><td>Player</td><td style="text-align:center">Pos</td>';
+h+='<td style="text-align:center">'+(isFirst?'1st TD%':'TD%')+'</td>';
+if(isFirst)h+='<td style="text-align:center">Odds</td>';
+h+='<td style="text-align:center">TD/G</td><td style="text-align:center">TDs</td><td style="text-align:center">TCH/G</td>';
+if(!isFirst)h+='<td style="text-align:center">Conf</td>';
+h+='</tr>';
+
+players.slice(0,15).forEach(function(p,i){
+var bg=i%2===0?'rgba(137,207,240,.02)':'transparent';
+var probPct=(p.prob*100).toFixed(1);
+var probColor;
+if(isFirst){
+probColor=p.prob>=0.10?'#66bb6a':p.prob>=0.06?'#ffd54f':p.prob>=0.03?'#ffa726':'#ef5350';
+}else{
+probColor=p.prob>=0.55?'#66bb6a':p.prob>=0.35?'#ffd54f':p.prob>=0.20?'#ffa726':'#ef5350';
+}
+var starBadge=p.starter?'<span style="color:#ffd54f;font-size:7px"> ★</span>':'';
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.03);background:'+bg+'">';
+h+='<td style="padding:2px;color:#888">'+(i+1)+'</td>';
+h+='<td style="font-weight:600">'+p.name+starBadge+'</td>';
+h+='<td style="text-align:center">'+p.pos+'</td>';
+h+='<td style="text-align:center;font-weight:800;color:'+probColor+'">'+probPct+'%</td>';
+if(isFirst){
+var oddsColor=p.impliedOdds.charAt(0)==='+'?'#66bb6a':'#ffa726';
+h+='<td style="text-align:center;font-weight:700;color:'+oddsColor+'">'+p.impliedOdds+'</td>';
+}
+h+='<td style="text-align:center">'+p.tdRate.toFixed(2)+'</td>';
+h+='<td style="text-align:center;color:'+accent+'">'+p.totalTDs+'</td>';
+h+='<td style="text-align:center">'+p.touches.toFixed(1)+'</td>';
+if(!isFirst){
+var confColor=p.confidence==='HIGH'?'#66bb6a':p.confidence==='MED'?'#ffd54f':'#ef5350';
+h+='<td style="text-align:center;color:'+confColor+';font-weight:700;font-size:7px">'+p.confidence+'</td>';
+}
+h+='</tr>';
+});
+h+='</table>';
+return h;
+}
+
 setInterval(function(){
 var cards=document.querySelectorAll('.gc[data-gpk^="nfl_"]');
 cards.forEach(function(card){
@@ -3781,22 +3742,51 @@ var aid=espnNFLIds[aAbbr]||'';
 if(!hid||!aid)return;
 var hA=hAbbr.toUpperCase();
 var aA=aAbbr.toUpperCase();
+
+/* Create all 4 buttons */
 var rBtn=document.createElement('button');
 rBtn.className='xb nfl-roster-btn';
 rBtn.textContent='Rosters';
 rBtn.style.marginLeft='4px';
+
 var iBtn=document.createElement('button');
 iBtn.className='xb nfl-inj-btn';
 iBtn.textContent='Injuries';
 iBtn.style.marginLeft='4px';
+
+var atdBtn=document.createElement('button');
+atdBtn.className='xb nfl-atd-btn';
+atdBtn.textContent='Anytime TD';
+atdBtn.style.marginLeft='4px';
+atdBtn.style.color='#89CFF0';
+
+var ftdBtn=document.createElement('button');
+ftdBtn.className='xb nfl-ftd-btn';
+ftdBtn.textContent='First TD';
+ftdBtn.style.marginLeft='4px';
+ftdBtn.style.color='#ffa726';
+
 btnRow.appendChild(rBtn);
 btnRow.appendChild(iBtn);
+btnRow.appendChild(atdBtn);
+btnRow.appendChild(ftdBtn);
+
+/* Create all 4 panels */
 var rPanel=document.createElement('div');
 rPanel.style.display='none';
 var iPanel=document.createElement('div');
 iPanel.style.display='none';
+var atdPanel=document.createElement('div');
+atdPanel.style.display='none';
+var ftdPanel=document.createElement('div');
+ftdPanel.style.display='none';
+
 btnRow.parentElement.insertBefore(rPanel,btnRow.nextSibling);
 btnRow.parentElement.insertBefore(iPanel,rPanel.nextSibling);
+btnRow.parentElement.insertBefore(atdPanel,iPanel.nextSibling);
+btnRow.parentElement.insertBefore(ftdPanel,atdPanel.nextSibling);
+
+/* Rosters button */
 rBtn.addEventListener('click',function(){
 if(rPanel.style.display==='block'){rPanel.style.display='none';return;}
 rPanel.style.display='block';
@@ -3806,6 +3796,8 @@ var hr=r.shift();var ar=r.shift();
 rPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+renderNFLRosterPanel(hr,hA)+'</div><div style="flex:1;min-width:140px">'+renderNFLRosterPanel(ar,aA)+'</div></div>';
 });
 });
+
+/* Injuries button */
 iBtn.addEventListener('click',function(){
 if(iPanel.style.display==='block'){iPanel.style.display='none';return;}
 iPanel.style.display='block';
@@ -3813,6 +3805,36 @@ iPanel.innerHTML='<div class="ld"><div class="spin"></div> Loading injuries...</
 Promise.all([fetchNFLInjuries(hid),fetchNFLInjuries(aid)]).then(function(r){
 var hi=r.shift();var ai=r.shift();
 iPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+renderNFLInjuryPanel(hi,hA)+'</div><div style="flex:1;min-width:140px">'+renderNFLInjuryPanel(ai,aA)+'</div></div>';
+});
+});
+
+/* Anytime TD button */
+atdBtn.addEventListener('click',function(){
+if(atdPanel.style.display==='block'){atdPanel.style.display='none';return;}
+atdPanel.style.display='block';
+atdPanel.innerHTML='<div class="ld"><div class="spin"></div> Calculating Anytime TD...</div>';
+Promise.all([
+fetchNFLRoster(hid),fetchNFLRoster(aid),
+nflGetTeamStats(hid).catch(function(){return{rzPct:55,papg:22};}),
+nflGetTeamStats(aid).catch(function(){return{rzPct:55,papg:22};})
+]).then(function(r){
+var hr=r[0];var ar=r[1];var hStats=r[2];var aStats=r[3];
+atdPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+renderGameTDPanel(hr,hA,aStats.papg,hStats.rzPct,'anytime')+'</div><div style="flex:1;min-width:140px">'+renderGameTDPanel(ar,aA,hStats.papg,aStats.rzPct,'anytime')+'</div></div>';
+});
+});
+
+/* First TD button */
+ftdBtn.addEventListener('click',function(){
+if(ftdPanel.style.display==='block'){ftdPanel.style.display='none';return;}
+ftdPanel.style.display='block';
+ftdPanel.innerHTML='<div class="ld"><div class="spin"></div> Calculating First TD...</div>';
+Promise.all([
+fetchNFLRoster(hid),fetchNFLRoster(aid),
+nflGetTeamStats(hid).catch(function(){return{rzPct:55,papg:22};}),
+nflGetTeamStats(aid).catch(function(){return{rzPct:55,papg:22};})
+]).then(function(r){
+var hr=r[0];var ar=r[1];var hStats=r[2];var aStats=r[3];
+ftdPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+renderGameTDPanel(hr,hA,aStats.papg,hStats.rzPct,'first')+'</div><div style="flex:1;min-width:140px">'+renderGameTDPanel(ar,aA,hStats.papg,aStats.rzPct,'first')+'</div></div>';
 });
 });
 });
@@ -3882,6 +3904,76 @@ totalTDs:totalTDs,
 touchesPerGame:touchesPerGame,
 gamesPlayed:gp,
 confidence:confidence
+};
+}
+
+
+function calcFirstTDProb(player,teamRzPct,oppPapg){
+var gp=player.gamesPlayed||1;
+var totalTDs=0;
+var carries=0,targets=0,receptions=0;
+
+if(player.statCats){
+if(player.statCats.rushing){
+var rt=player.statCats.rushing.totals||[];
+if(rt[3])totalTDs+=(rt[3].type==='frac'?rt[3].num:rt[3].val)||0;
+if(rt[0])carries=(rt[0].type==='frac'?rt[0].num:rt[0].val)||0;
+}
+if(player.statCats.receiving){
+var rc=player.statCats.receiving.totals||[];
+if(rc[3])totalTDs+=(rc[3].type==='frac'?rc[3].num:rc[3].val)||0;
+if(rc[5])targets=(rc[5].type==='frac'?rc[5].num:rc[5].val)||0;
+if(rc[0])receptions=(rc[0].type==='frac'?rc[0].num:rc[0].val)||0;
+}
+if(player.statCats.passing){
+var pt=player.statCats.passing.totals||[];
+if(pt[3])totalTDs+=(pt[3].type==='frac'?pt[3].num:pt[3].val)||0;
+}
+}
+
+var tdRate=totalTDs/gp;
+var touchesPerGame=(carries+targets)/gp;
+
+/* Factor 1: TD Rate (30%) — frequent scorers more likely to score first */
+var tdRateScore=Math.min(tdRate/1.5,1)*0.30;
+
+/* Factor 2: Early-Game Usage (25%) — high-volume players get early touches */
+var usageScore=Math.min(touchesPerGame/20,1)*0.25;
+
+/* Factor 3: Position Weight (20%) — RBs/WRs get first-drive work */
+var posWeight=0;
+if(player.pos==='RB'||player.pos==='FB')posWeight=0.20;
+else if(player.pos==='WR')posWeight=0.16;
+else if(player.pos==='TE')posWeight=0.12;
+else if(player.pos==='QB')posWeight=0.10;
+var posScore=posWeight;
+
+/* Factor 4: Starter Boost (15%) — only starters are on opening drive */
+var starterScore=player.starter?0.15:player.depth<=2?0.05:0.01;
+
+/* Factor 5: Matchup (10%) — weaker defenses give up early scores */
+var matchupScore=Math.min((oppPapg||22)/30,1)*0.10;
+
+/* Combine factors */
+var rawProb=tdRateScore+usageScore+posScore+starterScore+matchupScore;
+
+/* First TD is much harder than Anytime TD — scale down significantly */
+/* In a typical NFL game, ~50 eligible players but only 1 scores first */
+/* Scale to realistic range: cap at 15%, floor at 0.5% */
+var prob=Math.max(0.005,Math.min(0.15,rawProb*0.25));
+
+/* Convert to implied American odds */
+var impliedOdds;
+if(prob>=0.5){impliedOdds='-'+(Math.round(prob/(1-prob)*100));}
+else{impliedOdds='+'+(Math.round((1-prob)/prob*100));}
+
+return{
+prob:prob,
+tdRate:tdRate,
+totalTDs:totalTDs,
+touchesPerGame:touchesPerGame,
+impliedOdds:impliedOdds,
+gamesPlayed:gp
 };
 }
 
@@ -4076,6 +4168,117 @@ h+='</tr>';
 h+='</table>';
 });
 
+
+/* ===== FIRST TD SCORER SECTION ===== */
+h+='<div style="margin-top:16px;padding-top:12px;border-top:2px solid rgba(137,207,240,.15)">';
+h+='<div style="font-size:14px;font-weight:900;color:#ffa726;margin-bottom:4px">🥇 First TD Scorer Predictions — Week '+NFL_WEEK+'</div>';
+h+='<div style="font-size:9px;color:#888;margin-bottom:8px">Model: TD Rate (30%) + Usage (25%) + Position (20%) + Starter (15%) + Matchup (10%) | Scaled for single-scorer probability</div>';
+
+/* Calculate First TD for all players */
+var firstTDPlayers=[];
+matchups.forEach(function(m){
+var homeStats=teamStatsMap[m.home.id]||{};
+var awayStats=teamStatsMap[m.away.id]||{};
+var homeRoster=teamRosterMap[m.home.id]||{};
+var awayRoster=teamRosterMap[m.away.id]||{};
+var posKeys=['qb','rb','wr','te'];
+
+posKeys.forEach(function(pk){
+(homeRoster[pk]||[]).forEach(function(p){
+if(!p.statCats||Object.keys(p.statCats).length===0)return;
+var ftd=calcFirstTDProb(p,homeStats.rzPct,awayStats.papg);
+if(ftd.totalTDs>0||ftd.touchesPerGame>=5){
+firstTDPlayers.push({
+name:p.name,num:p.num,pos:p.pos,team:m.home.abbr,opp:m.away.abbr,
+matchup:m.home.abbr+' vs '+m.away.abbr,starter:p.starter,
+prob:ftd.prob,tdRate:ftd.tdRate,totalTDs:ftd.totalTDs,
+touches:ftd.touchesPerGame,impliedOdds:ftd.impliedOdds,gp:ftd.gamesPlayed
+});
+}
+});
+});
+
+posKeys.forEach(function(pk){
+(awayRoster[pk]||[]).forEach(function(p){
+if(!p.statCats||Object.keys(p.statCats).length===0)return;
+var ftd=calcFirstTDProb(p,awayStats.rzPct,homeStats.papg);
+if(ftd.totalTDs>0||ftd.touchesPerGame>=5){
+firstTDPlayers.push({
+name:p.name,num:p.num,pos:p.pos,team:m.away.abbr,opp:m.home.abbr,
+matchup:m.away.abbr+' @ '+m.home.abbr,starter:p.starter,
+prob:ftd.prob,tdRate:ftd.tdRate,totalTDs:ftd.totalTDs,
+touches:ftd.touchesPerGame,impliedOdds:ftd.impliedOdds,gp:ftd.gamesPlayed
+});
+}
+});
+});
+});
+
+firstTDPlayers.sort(function(a,b){return b.prob-a.prob;});
+
+/* Top 25 First TD Scorers */
+h+='<div style="font-size:11px;font-weight:800;color:#ffa726;margin:8px 0 4px">🔥 Top 25 First TD Scorers</div>';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#ffa726;font-weight:600;border-bottom:1px solid rgba(255,167,38,.15)">';
+h+='<td style="padding:3px">#</td><td>Player</td><td style="text-align:center">Pos</td><td style="text-align:center">Team</td><td style="text-align:center">vs</td>';
+h+='<td style="text-align:center">1st TD%</td><td style="text-align:center">Odds</td><td style="text-align:center">TD/G</td><td style="text-align:center">TDs</td><td style="text-align:center">TCH/G</td><td style="text-align:center">GP</td></tr>';
+
+firstTDPlayers.slice(0,25).forEach(function(p,i){
+var bg=i%2===0?'rgba(255,167,38,.03)':'transparent';
+var probPct=(p.prob*100).toFixed(1);
+var probColor=p.prob>=0.10?'#66bb6a':p.prob>=0.06?'#ffd54f':p.prob>=0.03?'#ffa726':'#ef5350';
+var oddsColor=p.impliedOdds.charAt(0)==='+'?'#66bb6a':'#ffa726';
+var starBadge=p.starter?'<span style="color:#ffd54f;font-size:7px"> ★</span>':'';
+h+='<tr style="border-bottom:1px solid rgba(255,167,38,.05);background:'+bg+'">';
+h+='<td style="padding:3px;color:#888">'+(i+1)+'</td>';
+h+='<td style="font-weight:600">'+p.name+starBadge+'</td>';
+h+='<td style="text-align:center">'+p.pos+'</td>';
+h+='<td style="text-align:center">'+p.team+'</td>';
+h+='<td style="text-align:center;color:#888">'+p.opp+'</td>';
+h+='<td style="text-align:center;font-weight:800;color:'+probColor+'">'+probPct+'%</td>';
+h+='<td style="text-align:center;font-weight:700;color:'+oddsColor+'">'+p.impliedOdds+'</td>';
+h+='<td style="text-align:center">'+p.tdRate.toFixed(2)+'</td>';
+h+='<td style="text-align:center;color:#ffa726">'+p.totalTDs+'</td>';
+h+='<td style="text-align:center">'+p.touches.toFixed(1)+'</td>';
+h+='<td style="text-align:center">'+p.gp+'</td>';
+h+='</tr>';
+});
+h+='</table>';
+
+/* Per-game breakdown */
+h+='<div style="font-size:11px;font-weight:800;color:#ffa726;margin:12px 0 4px">📋 First TD by Matchup</div>';
+matchups.forEach(function(m){
+var gamePlayers=firstTDPlayers.filter(function(p){
+return p.team===m.home.abbr||p.team===m.away.abbr;
+}).slice(0,10);
+if(gamePlayers.length===0)return;
+
+h+='<div style="font-size:10px;font-weight:700;color:#89CFF0;margin:8px 0 3px">'+m.away.abbr+' @ '+m.home.abbr+'</div>';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#ffa726;font-weight:600;border-bottom:1px solid rgba(255,167,38,.1)">';
+h+='<td style="padding:2px">#</td><td>Player</td><td style="text-align:center">Pos</td><td style="text-align:center">Team</td>';
+h+='<td style="text-align:center">1st TD%</td><td style="text-align:center">Odds</td><td style="text-align:center">TD/G</td><td style="text-align:center">TCH/G</td></tr>';
+
+gamePlayers.forEach(function(p,i){
+var bg=i%2===0?'rgba(255,167,38,.02)':'transparent';
+var probPct=(p.prob*100).toFixed(1);
+var probColor=p.prob>=0.10?'#66bb6a':p.prob>=0.06?'#ffd54f':p.prob>=0.03?'#ffa726':'#ef5350';
+var oddsColor=p.impliedOdds.charAt(0)==='+'?'#66bb6a':'#ffa726';
+var starBadge=p.starter?'<span style="color:#ffd54f;font-size:7px"> ★</span>':'';
+h+='<tr style="border-bottom:1px solid rgba(255,167,38,.03);background:'+bg+'">';
+h+='<td style="padding:2px;color:#888">'+(i+1)+'</td>';
+h+='<td style="font-weight:600">'+p.name+starBadge+'</td>';
+h+='<td style="text-align:center">'+p.pos+'</td>';
+h+='<td style="text-align:center">'+p.team+'</td>';
+h+='<td style="text-align:center;font-weight:800;color:'+probColor+'">'+probPct+'%</td>';
+h+='<td style="text-align:center;font-weight:700;color:'+oddsColor+'">'+p.impliedOdds+'</td>';
+h+='<td style="text-align:center">'+p.tdRate.toFixed(2)+'</td>';
+h+='<td style="text-align:center">'+p.touches.toFixed(1)+'</td>';
+h+='</tr>';
+});
+h+='</table>';
+});
+h+='</div>';
 h+='<div style="font-size:8px;color:#555;margin-top:12px;text-align:center">PlutoLil Picks v9.3 — Anytime TD Model | Data: ESPN | Updated: '+new Date().toLocaleString()+'</div>';
 h+='</div>';
 el.innerHTML=h;
