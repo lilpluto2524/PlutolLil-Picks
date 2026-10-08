@@ -3770,6 +3770,7 @@ btnRow.appendChild(rBtn);
 btnRow.appendChild(iBtn);
 btnRow.appendChild(atdBtn);
 btnRow.appendChild(ftdBtn);
+var ppBtn=document.createElement('button');ppBtn.className='xb nfl-pp-btn';ppBtn.textContent='Props';ppBtn.style.marginLeft='4px';ppBtn.style.color='#bb86fc';btnRow.appendChild(ppBtn);
 
 /* Create all 4 panels */
 var rPanel=document.createElement('div');
@@ -3780,11 +3781,13 @@ var atdPanel=document.createElement('div');
 atdPanel.style.display='none';
 var ftdPanel=document.createElement('div');
 ftdPanel.style.display='none';
+var ppPanel=document.createElement('div');ppPanel.style.display='none';
 
 btnRow.parentElement.insertBefore(rPanel,btnRow.nextSibling);
 btnRow.parentElement.insertBefore(iPanel,rPanel.nextSibling);
 btnRow.parentElement.insertBefore(atdPanel,iPanel.nextSibling);
 btnRow.parentElement.insertBefore(ftdPanel,atdPanel.nextSibling);
+btnRow.parentElement.insertBefore(ppPanel,ftdPanel.nextSibling);
 
 /* Rosters button */
 rBtn.addEventListener('click',function(){
@@ -3837,11 +3840,159 @@ var hr=r[0];var ar=r[1];var hStats=r[2];var aStats=r[3];
 ftdPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+renderGameTDPanel(hr,hA,aStats.papg,hStats.rzPct,'first')+'</div><div style="flex:1;min-width:140px">'+renderGameTDPanel(ar,aA,hStats.papg,aStats.rzPct,'first')+'</div></div>';
 });
 });
+ppBtn.addEventListener('click',function(){if(ppPanel.style.display==='block'){ppPanel.style.display='none';return;}ppPanel.style.display='block';ppPanel.innerHTML='<div class="ld"><div class="spin"></div> Loading Props...</div>';Promise.all([fetchNFLRoster(hid),fetchNFLRoster(aid),nflGetTeamStats(hid).catch(function(){return{papg:22,yapg:340};}),nflGetTeamStats(aid).catch(function(){return{papg:22,yapg:340};})]).then(function(r){var hr=r[0];var ar=r[1];var hStats=r[2];var aStats=r[3];ppPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+renderPlayerPropsPanel(hr,hA,hStats,aStats)+'</div><div style="flex:1;min-width:140px">'+renderPlayerPropsPanel(ar,aA,aStats,hStats)+'</div></div>';});});
+
 });
 },2000);
 
 
 /* ===== NFL PROPS TAB — ANYTIME TD MODEL ===== */
+
+
+/* ===== PLAYER PROPS PREDICTION MODEL ===== */
+function calcPlayerProps(player,teamStats,oppStats){
+var gp=player.gamesPlayed||1;
+var props={pos:player.pos,name:player.name,team:'',opp:'',starter:player.starter||false};
+
+/* Extract raw stats from statCats */
+var passYds=0,passTDs=0,comps=0,attempts=0,ints=0,rushYds=0,rushAtt=0,rushTDs=0;
+var recYds=0,recs=0,recTDs=0,tgts=0;
+var fgm=0,fga=0,xpm=0,xpa=0,kickPts=0;
+
+if(player.statCats){
+if(player.statCats.passing){
+var pt=player.statCats.passing.totals||[];
+/* passing: C/ATT, YDS, AVG, TD, INT, SACKS, QBR, RTG */
+if(pt[0]&&pt[0].type==='frac'){comps=pt[0].num||0;attempts=pt[0].den||0;}
+if(pt[1])passYds=(pt[1].type==='frac'?pt[1].num:pt[1].val)||0;
+if(pt[3])passTDs=(pt[3].type==='frac'?pt[3].num:pt[3].val)||0;
+if(pt[4])ints=(pt[4].type==='frac'?pt[4].num:pt[4].val)||0;
+}
+if(player.statCats.rushing){
+var rt=player.statCats.rushing.totals||[];
+/* rushing: CAR, YDS, AVG, TD, LONG */
+if(rt[0])rushAtt=(rt[0].type==='frac'?rt[0].num:rt[0].val)||0;
+if(rt[1])rushYds=(rt[1].type==='frac'?rt[1].num:rt[1].val)||0;
+if(rt[3])rushTDs=(rt[3].type==='frac'?rt[3].num:rt[3].val)||0;
+}
+if(player.statCats.receiving){
+var rc=player.statCats.receiving.totals||[];
+/* receiving: REC, YDS, AVG, TD, LONG, TGTS */
+if(rc[0])recs=(rc[0].type==='frac'?rc[0].num:rc[0].val)||0;
+if(rc[1])recYds=(rc[1].type==='frac'?rc[1].num:rc[1].val)||0;
+if(rc[3])recTDs=(rc[3].type==='frac'?rc[3].num:rc[3].val)||0;
+if(rc[5])tgts=(rc[5].type==='frac'?rc[5].num:rc[5].val)||0;
+}
+if(player.statCats.kicking){
+var kt=player.statCats.kicking.totals||[];
+/* kicking: FGM/FGA, FG%, LONG, XPM/XPA, PTS */
+if(kt[0]&&kt[0].type==='frac'){fgm=kt[0].num||0;fga=kt[0].den||0;}
+if(kt[3]&&kt[3].type==='frac'){xpm=kt[3].num||0;xpa=kt[3].den||0;}
+if(kt[4])kickPts=(kt[4].type==='frac'?kt[4].num:kt[4].val)||0;
+}
+}
+
+/* Per-game averages */
+var passYpg=passYds/gp;
+var passTDpg=passTDs/gp;
+var compPg=comps/gp;
+var attPg=attempts/gp;
+var intPg=ints/gp;
+var rushYpg=rushYds/gp;
+var rushAttPg=rushAtt/gp;
+var recYpg=recYds/gp;
+var recPg=recs/gp;
+var tgtPg=tgts/gp;
+var fgmPg=fgm/gp;
+var xpmPg=xpm/gp;
+var kickPtsPg=kickPts/gp;
+
+/* Matchup adjustment factor */
+/* If opponent allows more than average, boost projection; if less, reduce */
+var oppPapg=oppStats.papg||22;
+var oppYapg=oppStats.yapg||340;
+var leagueAvgPts=22;
+var leagueAvgYds=340;
+var ptsMultiplier=oppPapg>0?(oppPapg/leagueAvgPts):1;
+var ydsMultiplier=oppYapg>0?(oppYapg/leagueAvgYds):1;
+
+/* Blend: 70% season avg + 30% matchup adjusted */
+var matchBlend=function(avg,multiplier){return avg*0.70+avg*multiplier*0.30;};
+
+/* Build props based on position */
+props.lines=[];
+
+if(player.pos==='QB'){
+props.lines.push({prop:'Pass Yds',avg:passYpg,projected:matchBlend(passYpg,ydsMultiplier),season:passYds,gp:gp});
+props.lines.push({prop:'Pass TDs',avg:passTDpg,projected:matchBlend(passTDpg,ptsMultiplier),season:passTDs,gp:gp});
+props.lines.push({prop:'Completions',avg:compPg,projected:matchBlend(compPg,ydsMultiplier),season:comps,gp:gp});
+props.lines.push({prop:'INTs',avg:intPg,projected:intPg,season:ints,gp:gp});
+props.lines.push({prop:'Rush Yds',avg:rushYpg,projected:matchBlend(rushYpg,ydsMultiplier),season:rushYds,gp:gp});
+}
+else if(player.pos==='RB'||player.pos==='FB'){
+props.lines.push({prop:'Rush Yds',avg:rushYpg,projected:matchBlend(rushYpg,ydsMultiplier),season:rushYds,gp:gp});
+props.lines.push({prop:'Receptions',avg:recPg,projected:matchBlend(recPg,1),season:recs,gp:gp});
+props.lines.push({prop:'Rec Yds',avg:recYpg,projected:matchBlend(recYpg,ydsMultiplier),season:recYds,gp:gp});
+props.lines.push({prop:'Total Yds',avg:(rushYpg+recYpg),projected:matchBlend(rushYpg+recYpg,ydsMultiplier),season:rushYds+recYds,gp:gp});
+}
+else if(player.pos==='WR'){
+props.lines.push({prop:'Rec Yds',avg:recYpg,projected:matchBlend(recYpg,ydsMultiplier),season:recYds,gp:gp});
+props.lines.push({prop:'Receptions',avg:recPg,projected:matchBlend(recPg,1),season:recs,gp:gp});
+props.lines.push({prop:'Targets',avg:tgtPg,projected:matchBlend(tgtPg,1),season:tgts,gp:gp});
+}
+else if(player.pos==='TE'){
+props.lines.push({prop:'Rec Yds',avg:recYpg,projected:matchBlend(recYpg,ydsMultiplier),season:recYds,gp:gp});
+props.lines.push({prop:'Receptions',avg:recPg,projected:matchBlend(recPg,1),season:recs,gp:gp});
+}
+else if(player.pos==='K'||player.pos==='PK'){
+props.lines.push({prop:'FG Made',avg:fgmPg,projected:matchBlend(fgmPg,ptsMultiplier),season:fgm,gp:gp});
+props.lines.push({prop:'Kick Pts',avg:kickPtsPg,projected:matchBlend(kickPtsPg,ptsMultiplier),season:kickPts,gp:gp});
+props.lines.push({prop:'XP Made',avg:xpmPg,projected:matchBlend(xpmPg,ptsMultiplier),season:xpm,gp:gp});
+}
+
+/* Matchup rating */
+if(ptsMultiplier>=1.15)props.matchup='SMASH';
+else if(ptsMultiplier>=1.05)props.matchup='GOOD';
+else if(ptsMultiplier>=0.95)props.matchup='NEUTRAL';
+else if(ptsMultiplier>=0.85)props.matchup='TOUGH';
+else props.matchup='AVOID';
+
+return props;
+}
+
+
+function renderPlayerPropsPanel(roster,teamAbbr,teamStats,oppStats){
+var posKeys=['qb','rb','wr','te','k'];
+var h='<div style="font-size:11px;font-weight:800;color:#bb86fc;margin-bottom:4px">'+teamAbbr+' Player Props</div>';
+posKeys.forEach(function(pk){
+var players=(roster[pk]||[]).filter(function(p){return p.statCats&&Object.keys(p.statCats).length>0;});
+if(players.length===0)return;
+h+='<div style="font-size:9px;font-weight:700;color:#ffd54f;margin:6px 0 3px">'+pk.toUpperCase()+'</div>';
+h+='<table style="width:100%;font-size:8px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#bb86fc;font-weight:600;border-bottom:1px solid rgba(187,134,252,.1)"><td style="padding:2px">Player</td><td style="text-align:center">Prop</td><td style="text-align:center">Avg</td><td style="text-align:center">Proj</td><td style="text-align:center">Szn</td><td style="text-align:center">Matchup</td></tr>';
+players.slice(0,pk==='qb'?3:5).forEach(function(p){
+var pp=calcPlayerProps(p,teamStats,oppStats);
+var star=p.starter?'<span style="color:#ffd54f;font-size:7px"> ★</span>':'';
+var mClr=pp.matchup==='SMASH'?'#66bb6a':pp.matchup==='GOOD'?'#81c784':pp.matchup==='NEUTRAL'?'#ffd54f':pp.matchup==='TOUGH'?'#ffa726':'#ef5350';
+pp.lines.forEach(function(line,li){
+var bg=li%2===0?'rgba(187,134,252,.02)':'transparent';
+var pClr=line.projected>line.avg?'#66bb6a':line.projected<line.avg*0.95?'#ef5350':'#e0e0e0';
+h+='<tr style="border-bottom:1px solid rgba(187,134,252,.03);background:'+bg+'">';
+if(li===0)h+='<td style="padding:2px;font-weight:600" rowspan="'+pp.lines.length+'">'+p.name+star+'</td>';
+h+='<td style="text-align:center;color:#bb86fc">'+line.prop+'</td>';
+h+='<td style="text-align:center">'+line.avg.toFixed(1)+'</td>';
+h+='<td style="text-align:center;font-weight:700;color:'+pClr+'">'+line.projected.toFixed(1)+'</td>';
+h+='<td style="text-align:center;color:#888">'+line.season+'</td>';
+if(li===0)h+='<td style="text-align:center;font-weight:700;font-size:7px;color:'+mClr+'" rowspan="'+pp.lines.length+'">'+pp.matchup+'</td>';
+h+='</tr>';
+});
+});
+h+='</table>';
+});
+return h;
+}
+
+
 
 function calcAnytimeTDProb(player,teamRzPct,oppPapg){
 /* Factor 1: TD Rate (35%) — TDs per game */
@@ -3850,26 +4001,21 @@ var gp=player.gamesPlayed||1;
 var carries=0,targets=0;
 
 /* Count TDs from all stat categories */
+
 if(player.statCats){
 if(player.statCats.rushing){
 var rt=player.statCats.rushing.totals||[];
-/* rushing: CAR, YDS, AVG, TD, LONG */
 if(rt[3])totalTDs+=(rt[3].type==='frac'?rt[3].num:rt[3].val)||0;
 if(rt[0])carries=(rt[0].type==='frac'?rt[0].num:rt[0].val)||0;
 }
 if(player.statCats.receiving){
 var rc=player.statCats.receiving.totals||[];
-/* receiving: REC, YDS, AVG, TD, LONG, TGTS */
 if(rc[3])totalTDs+=(rc[3].type==='frac'?rc[3].num:rc[3].val)||0;
 if(rc[5])targets=(rc[5].type==='frac'?rc[5].num:rc[5].val)||0;
 else if(rc[0])targets=(rc[0].type==='frac'?rc[0].num:rc[0].val)||0;
 }
-if(player.statCats.passing){
-var pt=player.statCats.passing.totals||[];
-/* passing: C/ATT, YDS, AVG, TD, INT, SACKS, QBR, RTG */
-if(pt[3])totalTDs+=(pt[3].type==='frac'?pt[3].num:pt[3].val)||0;
-/* QBs also rush — add rushing TDs if not already counted */
-}
+/* QBs: Do NOT count passing TDs — only rushing TDs count for Anytime TD bets */
+/* Passing TDs are already excluded since we only pull from rushing + receiving above */
 }
 
 var tdRate=totalTDs/gp;
@@ -3924,10 +4070,6 @@ var rc=player.statCats.receiving.totals||[];
 if(rc[3])totalTDs+=(rc[3].type==='frac'?rc[3].num:rc[3].val)||0;
 if(rc[5])targets=(rc[5].type==='frac'?rc[5].num:rc[5].val)||0;
 if(rc[0])receptions=(rc[0].type==='frac'?rc[0].num:rc[0].val)||0;
-}
-if(player.statCats.passing){
-var pt=player.statCats.passing.totals||[];
-if(pt[3])totalTDs+=(pt[3].type==='frac'?pt[3].num:pt[3].val)||0;
 }
 }
 
