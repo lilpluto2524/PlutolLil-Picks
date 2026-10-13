@@ -2112,7 +2112,7 @@ h+='<button class="qbet-btn" data-bet="'+g.gpk+'|Spread|'+g.bl.spTxt+'|'+fmtML(-
 h+='<button class="qbet-btn" data-bet="'+g.gpk+'|O/U|'+g.bl.ouPk+' '+g.bl.ouLine+'|'+fmtML(-110)+'">Bet '+g.bl.ouPk+'</button>';
 h+='</div>';
 
-h+='<div style="margin-top:4px"><button class="xb" data-toggle="det-'+g.gpk+'">Details</button> <button class="xb" data-toggle="note-'+g.gpk+'">Notes</button></div>';
+h+='<div style="margin-top:4px"><button class="xb" data-toggle="det-'+g.gpk+'">Details</button> <button class="xb" data-toggle="note-'+g.gpk+'">Notes</button> <button class="xb" onclick="plpShareNFL(\''+g.gpk+'\')">Share</button></div>';
 h+='<div class="collapsible" id="det-'+g.gpk+'">';
 h+='<div style="font-size:9px;color:#888">';
 var fKeys=Object.keys(g.pred.f);
@@ -3010,6 +3010,132 @@ if(!window._plpShareData)window._plpShareData={};
 function plpShare(gpk){
 var d=window._plpShareData[gpk];
 if(d)generatePickCard(d);
+}
+
+/* --- Shareable PLP Pick Card (NFL) --- */
+function generateNFLPickCard(gameData){
+var overlay=document.createElement('div');
+overlay.id='plp-share-overlay-nfl';
+overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;overflow-y:auto;';
+overlay.addEventListener('click',function(e){if(e.target===overlay)overlay.remove();});
+
+var card=document.createElement('div');
+var g=gameData;
+var gpk=g.gpk;
+var trkE=nflTrk.d.p.find(function(x){return x.g===gpk;});
+var isScored=trkE&&trkE.w!==null;
+var isWin=trkE&&trkE.w===true;
+var glowBorder=isScored?(isWin?'border:2px solid #66bb6a;box-shadow:0 0 30px rgba(102,187,106,0.4);':'border:2px solid #ef5350;box-shadow:0 0 30px rgba(239,83,80,0.4);'):'border:2px solid rgba(137,207,240,0.3);box-shadow:0 0 40px rgba(137,207,240,0.15);';
+card.style.cssText='width:380px;background:linear-gradient(135deg,#0a0a1a 0%,#0d1b2a 50%,#0a0a1a 100%);'+glowBorder+'border-radius:16px;padding:24px;font-family:system-ui,-apple-system,sans-serif;';
+
+var hLogo='https://a.espncdn.com/i/teamlogos/nfl/500/'+g.hI.a.toLowerCase()+'.png';
+var aLogo='https://a.espncdn.com/i/teamlogos/nfl/500/'+g.aI.a.toLowerCase()+'.png';
+var pick=g.pred.hp>=0.5?g.hI:g.aI;
+var pickPct=g.pred.hp>=0.5?g.pred.hp:g.pred.ap;
+var pickLogo=g.pred.hp>=0.5?hLogo:aLogo;
+var confLvl=g.pred.conf>0.3?'HIGH':g.pred.conf>0.15?'MED':'LOW';
+var confClr=g.pred.conf>0.3?'#66bb6a':g.pred.conf>0.15?'#ffd54f':'#ef5350';
+
+var h='';
+
+/* Result badge if scored */
+if(isScored){
+var resultClr=isWin?'#66bb6a':'#ef5350';
+var resultTxt=isWin?'✅ HIT':'❌ MISS';
+h+='<div style="text-align:center;margin-bottom:10px;padding:8px;background:rgba('+(isWin?'102,187,106':'239,83,80')+',0.1);border-radius:8px;border:1px solid '+resultClr+'">';
+h+='<div style="font-size:18px;font-weight:900;color:'+resultClr+'">'+resultTxt+'</div>';
+if(trkE.bl){
+h+='<div style="display:flex;justify-content:center;gap:8px;margin-top:6px">';
+if(trkE.bl.spW!==null&&trkE.bl.spW!==undefined)h+='<span style="font-size:9px;padding:2px 6px;border-radius:4px;font-weight:800;color:'+(trkE.bl.spW?'#66bb6a':'#ef5350')+';background:rgba('+(trkE.bl.spW?'102,187,106':'239,83,80')+',0.1);border:1px solid '+(trkE.bl.spW?'#66bb6a':'#ef5350')+'">SPR '+(trkE.bl.spW?'✓':'✗')+'</span>';
+if(trkE.bl.ouW!==null&&trkE.bl.ouW!==undefined)h+='<span style="font-size:9px;padding:2px 6px;border-radius:4px;font-weight:800;color:'+(trkE.bl.ouW?'#66bb6a':'#ef5350')+';background:rgba('+(trkE.bl.ouW?'102,187,106':'239,83,80')+',0.1);border:1px solid '+(trkE.bl.ouW?'#66bb6a':'#ef5350')+'">O/U '+(trkE.bl.ouW?'✓':'✗')+'</span>';
+h+='</div>';
+}
+h+='</div>';
+}
+
+/* Header */
+h+='<div style="text-align:center;margin-bottom:16px">';
+h+='<div style="font-size:10px;letter-spacing:3px;color:#89CFF0;font-weight:900;margin-bottom:4px">PLUTOLIL PICKS</div>';
+h+='<div style="width:40px;height:2px;background:linear-gradient(90deg,transparent,#89CFF0,transparent);margin:0 auto 8px"></div>';
+h+='<div style="font-size:8px;color:#555;letter-spacing:1px">NFL WEEK '+NFL_WEEK+' PREDICTIONS</div>';
+h+='</div>';
+
+/* Matchup */
+h+='<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0;padding:12px;background:rgba(137,207,240,0.04);border-radius:10px;border:1px solid rgba(137,207,240,0.08)">';
+h+='<div style="text-align:center;flex:1"><img src="'+aLogo+'" style="width:40px;height:40px"><div style="font-size:12px;font-weight:800;color:#e0e0e0;margin-top:4px">'+g.aI.a+'</div><div style="font-size:10px;color:#888">'+(g.aD.w||0)+'-'+(g.aD.l||0)+'</div></div>';
+h+='<div style="text-align:center;padding:0 12px"><div style="font-size:10px;color:#888;margin-bottom:2px">'+g.pg.statusDetail+'</div><div style="font-size:16px;font-weight:900;color:#89CFF0">VS</div></div>';
+h+='<div style="text-align:center;flex:1"><img src="'+hLogo+'" style="width:40px;height:40px"><div style="font-size:12px;font-weight:800;color:#e0e0e0;margin-top:4px">'+g.hI.a+'</div><div style="font-size:10px;color:#888">'+(g.hD.w||0)+'-'+(g.hD.l||0)+'</div></div>';
+h+='</div>';
+
+/* PLP Pick */
+h+='<div style="text-align:center;margin:16px 0;padding:14px;background:rgba(137,207,240,0.06);border-radius:10px;border:1px solid rgba(137,207,240,0.12)">';
+h+='<div style="font-size:8px;color:#888;letter-spacing:2px;margin-bottom:6px">PLP PICK</div>';
+h+='<img src="'+pickLogo+'" style="width:32px;height:32px;margin-bottom:4px"><br>';
+h+='<div style="font-size:20px;font-weight:900;color:#89CFF0">'+pick.a+'</div>';
+h+='<div style="font-size:24px;font-weight:900;color:#e0e0e0;margin:4px 0">'+(pickPct*100).toFixed(1)+'%</div>';
+h+='<div style="display:inline-block;padding:3px 10px;border-radius:4px;font-size:9px;font-weight:800;color:'+confClr+';background:rgba(137,207,240,0.06);border:1px solid '+confClr+'">'+confLvl+' CONFIDENCE</div>';
+h+='</div>';
+
+/* Betting Lines */
+h+='<div style="display:flex;justify-content:space-around;margin:12px 0;padding:10px;background:rgba(137,207,240,0.03);border-radius:8px">';
+if(g.bl){
+var spClr='#e0e0e0',ouClr='#e0e0e0';
+var spBg='transparent',ouBg='transparent';
+var spBdr='rgba(137,207,240,0.2)',ouBdr='rgba(137,207,240,0.2)';
+var spTag='',ouTag='';
+if(trkE&&trkE.bl){
+if(trkE.bl.spW===true){spClr='#66bb6a';spBg='rgba(102,187,106,0.1)';spBdr='#66bb6a';spTag=' ✅';}
+else if(trkE.bl.spW===false){spClr='#ef5350';spBg='rgba(239,83,80,0.1)';spBdr='#ef5350';spTag=' ❌';}
+if(trkE.bl.ouW===true){ouClr='#66bb6a';ouBg='rgba(102,187,106,0.1)';ouBdr='#66bb6a';ouTag=' ✅';}
+else if(trkE.bl.ouW===false){ouClr='#ef5350';ouBg='rgba(239,83,80,0.1)';ouBdr='#ef5350';ouTag=' ❌';}
+}
+h+='<div style="text-align:center;padding:4px 12px;border-radius:6px;background:'+spBg+';border:1px solid '+spBdr+'"><div style="font-size:8px;color:#888">SPREAD</div><div style="font-size:11px;font-weight:800;color:'+spClr+'">'+(g.bl.spTxt||'--')+spTag+'</div></div>';
+h+='<div style="text-align:center;padding:4px 12px;border-radius:6px;background:'+ouBg+';border:1px solid '+ouBdr+'"><div style="font-size:8px;color:#888">O/U</div><div style="font-size:11px;font-weight:800;color:'+ouClr+'">'+(g.bl.ouPk||'--')+' '+(g.bl.ouLine||'--')+ouTag+'</div></div>';
+h+='<div style="text-align:center;padding:4px 12px;border-radius:6px;border:1px solid rgba(137,207,240,0.2)"><div style="font-size:8px;color:#888">ML</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+fmtML(g.bl.hML)+' / '+fmtML(g.bl.aML)+'</div></div>';
+}
+h+='</div>';
+
+/* Quarter-by-Quarter Score (final/live games) */
+if((g.pg.status==='final'||g.pg.status==='live')&&g.pg.hLine&&g.pg.hLine.length>0){
+h+='<div style="margin:12px 0;padding:10px;background:rgba(137,207,240,0.03);border-radius:8px">';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0;text-align:center">';
+h+='<tr style="color:#888;font-weight:600;border-bottom:1px solid rgba(137,207,240,.1)"><td></td><td>Q1</td><td>Q2</td><td>Q3</td><td>Q4</td>';
+if(g.pg.hLine.length>4)h+='<td>OT</td>';
+h+='<td style="color:#ffd54f;font-weight:800">T</td></tr>';
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.05)"><td style="font-weight:700;color:'+nflTeamClr(g.hId)+'">'+g.hI.a+'</td>';
+g.pg.hLine.forEach(function(q){h+='<td>'+q.displayValue+'</td>';});
+h+='<td style="font-weight:800;color:#ffd54f">'+g.pg.hScore+'</td></tr>';
+h+='<tr><td style="font-weight:700;color:'+nflTeamClr(g.aId)+'">'+g.aI.a+'</td>';
+g.pg.aLine.forEach(function(q){h+='<td>'+q.displayValue+'</td>';});
+h+='<td style="font-weight:800;color:#ffd54f">'+g.pg.aScore+'</td></tr>';
+h+='</table>';
+if(g.pg.status==='final')h+='<div style="text-align:center;font-size:9px;color:#888;font-weight:600;margin-top:4px">FINAL</div>';
+else h+='<div style="text-align:center;font-size:9px;color:#66bb6a;font-weight:600;margin-top:4px">'+g.pg.statusDetail+'</div>';
+h+='</div>';
+}else{
+/* Pre-game: show predicted score */
+h+='<div style="display:flex;justify-content:space-around;margin:8px 0;padding:8px;background:rgba(137,207,240,0.03);border-radius:8px">';
+h+='<div style="text-align:center"><div style="font-size:8px;color:#888">PRED SCORE</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+(g.bl?g.bl.hSc:'?')+' - '+(g.bl?g.bl.aSc:'?')+'</div></div>';
+h+='<div style="text-align:center"><div style="font-size:8px;color:#888">'+g.hI.a+' PPG</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+(g.hD.ppg||0).toFixed(1)+'</div></div>';
+h+='<div style="text-align:center"><div style="font-size:8px;color:#888">'+g.aI.a+' PPG</div><div style="font-size:11px;font-weight:800;color:#e0e0e0">'+(g.aD.ppg||0).toFixed(1)+'</div></div>';
+h+='</div>';
+}
+
+/* Footer */
+h+='<div style="text-align:center;margin-top:12px;padding-top:10px;border-top:1px solid rgba(137,207,240,0.08)">';
+h+='<div style="font-size:7px;color:#444;letter-spacing:1px">PLUTOLIL PICKS \u2022 NFL AI MODEL \u2022 WEEK '+NFL_WEEK+' \u2022 '+new Date().toLocaleDateString()+'</div>';
+h+='</div>';
+
+card.innerHTML=h;
+overlay.appendChild(card);
+document.body.appendChild(overlay);
+}
+
+function plpShareNFL(gpk){
+if(window._plpNFLCache){
+var found=window._plpNFLCache.find(function(x){return x.gpk===gpk;});
+if(found)generateNFLPickCard(found);
+}
 }
 
 /* --- Lineups, BvP Splits, Batter Props --- */
@@ -4452,14 +4578,41 @@ el.innerHTML='<div class="no-data">Error loading props: '+e.message+'</div>';
 
 /* ===== NFL UPGRADE PART 1: Records, Bye Weeks, Time Slots, Turnover Margin ===== */
 
-/* --- NFL Bye Weeks 2026 (update when NFL releases schedule) --- */
-var NFL_BYES={
-5:['DEN','MIN'],6:['DET','HOU','KC','LAR'],
-7:['ARI','CHI','NYG','TB'],8:['ATL','IND','MIA','NE'],
-9:['BUF','DAL','PIT','SF'],10:['BAL','CIN','JAX','TEN'],
-11:['CLE','GB','LV','SEA'],12:['CAR','LAC','NO','NYJ'],
-13:['PHI','WAS'],14:[]
-};
+
+/* --- NFL Bye Weeks (Dynamic from ESPN) --- */
+var NFL_BYES_CACHE={};
+var ALL_NFL_ABBRS=['ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','DET','GB','HOU','IND','JAX','KC','LAC','LAR','LV','MIA','MIN','NE','NO','NYG','NYJ','PHI','PIT','SEA','SF','TB','TEN','WAS'];
+
+async function fetchByeTeams(week){
+if(NFL_BYES_CACHE[week])return NFL_BYES_CACHE[week];
+try{
+var url='https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week='+week+'&seasontype=2';
+var d=await fetch(url).then(function(r){return r.json();});
+var playing={};
+(d.events||[]).forEach(function(ev){
+(ev.competitions||[]).forEach(function(comp){
+(comp.competitors||[]).forEach(function(t){
+var abbr=t.team?t.team.abbreviation:'';
+if(abbr)playing[abbr.toUpperCase()]=true;
+});
+});
+});
+var byes=ALL_NFL_ABBRS.filter(function(a){return!playing[a];});
+NFL_BYES_CACHE[week]=byes;
+return byes;
+}catch(e){return[];}
+}
+
+function isOnBye(abbr,week){
+var byes=NFL_BYES_CACHE[week]||[];
+return byes.indexOf(abbr.toUpperCase())>-1;
+}
+
+async function getByeBanner(week){
+var byeTeams=await fetchByeTeams(week);
+if(byeTeams.length===0)return'';
+return'<div style="text-align:center;padding:8px;margin:8px 0;background:rgba(137,207,240,0.08);border:1px solid rgba(137,207,240,0.2);border-radius:8px;font-size:12px;color:#aaa"><span style="color:#ffd54f;font-weight:800">BYE WEEK:</span> '+byeTeams.join(', ')+'</div>';
+}
 
 /* --- Game Time Slot Detection --- */
 function getNFLSlot(dateStr){
@@ -4522,19 +4675,6 @@ if(abbr)map[abbr.toUpperCase()]={diff:to,perGame:gp>0?(to/gp).toFixed(1):'0.0'};
 nflTurnoverCache=map;
 return map;
 }catch(e){return{};}
-}
-
-/* --- Check if Team is on Bye --- */
-function isOnBye(abbr,week){
-var byeTeams=NFL_BYES[week]||[];
-return byeTeams.indexOf(abbr.toUpperCase())>-1;
-}
-
-/* --- Bye Week Banner for NFL Games Tab --- */
-function getByeBanner(week){
-var byeTeams=NFL_BYES[week]||[];
-if(byeTeams.length===0)return'';
-return'<div style="text-align:center;padding:8px;margin:8px 0;background:rgba(137,207,240,0.08);border:1px solid rgba(137,207,240,0.2);border-radius:8px;font-size:12px;color:#aaa"><span style="color:#ffd54f;font-weight:800">BYE WEEK:</span> '+byeTeams.join(', ')+'</div>';
 }
 
 /* --- Format NFL Record for Game Cards --- */
@@ -4693,7 +4833,7 @@ await fetchNFLTurnovers().catch(function(){});
 if(origLoadNFL)await origLoadNFL();
 var el=document.getElementById('tp-gm');
 if(!el)return;
-var byeBanner=getByeBanner(NFL_WEEK);
+var byeBanner=await getByeBanner(NFL_WEEK);
 if(byeBanner){
 var byeDiv=document.getElementById('nfl-bye-banner');
 if(!byeDiv){
