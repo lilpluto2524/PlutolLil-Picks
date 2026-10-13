@@ -1165,12 +1165,11 @@ broadcast:comp.broadcasts&&comp.broadcasts[0]&&comp.broadcasts[0].names?comp.bro
 
 async function nflGetTeamStats(teamId){
 try{
-var results=await Promise.all([
-fetch('https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/teams/'+teamId+'/statistics?season=2026&seasontype=2').then(function(r){return r.json();}),
-fetch('https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/teams/'+teamId+'?enable=record').then(function(r){return r.json();})
-]);
-var statData=results[0];
-var teamData=results[1];
+
+var statData=await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/'+teamId+'/statistics?season=2026&seasontype=2').then(function(r){return r.json();});
+var teamData=null;
+try{teamData=await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard').then(function(r){return r.json();});}catch(e){teamData=null;}
+
 
 var stats={ppg:22,papg:22,ypg:340,yapg:340,passYapg:230,rushYapg:110,rushYpg:120,passYpg:220,turnovers:15,thirdPct:40,rzPct:55,sacks:30,penYpg:50,streak:0,pdiff:0,dvoa:0,sos:0.5,rest:7,w:0,l:0};
 var gamesPlayed=4;
@@ -3406,40 +3405,24 @@ return NFLPlayerStatsCache[teamId];
 }
 }
 
-/* ===== UPDATED fetchNFLRoster with full stats ===== */
+
 async function fetchNFLRoster(teamId){
 if(NFLRosterCache[teamId])return NFLRosterCache[teamId];
 try{
 var results=await Promise.all([
-fetch('https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/teams/'+teamId+'/roster').then(function(r){return r.json();}),
-fetch('https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/teams/'+teamId+'/depthcharts').then(function(r){return r.json();}),
+fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/'+teamId+'/roster').then(function(r){return r.json();}),
 fetchNFLPlayerStats(teamId)
 ]);
 var rosterData=results[0];
-var depthData=results[1];
-var statsData=results[2];
+var statsData=results[1];
 var statPlayers=(statsData&&statsData.players)||{};
 var gamesPlayed=(statsData&&statsData.gamesPlayed)||0;
-
-/* Build starter set from depth chart */
-var starterIds={};
-var depthOrder={};
-var dc=depthData.depthchart||[];
-dc.forEach(function(scheme){
-var positions=scheme.positions||{};
-for(var posKey in positions){
-var athletes=(positions[posKey].athletes||[]);
-athletes.forEach(function(ath,idx){
-if(idx===0)starterIds[ath.id]=true;
-if(!depthOrder[ath.id])depthOrder[ath.id]=idx+1;
-});
-}
-});
 
 var roster={qb:[],rb:[],wr:[],te:[],ol:[],dl:[],lb:[],db:[],k:[],p:[],gamesPlayed:gamesPlayed};
 if(rosterData.athletes){
 rosterData.athletes.forEach(function(group){
-(group.items||[]).forEach(function(player){
+var posOrder=0;
+(group.items||[]).forEach(function(player,idx){
 var pStats=statPlayers[player.id]||null;
 var p={
 id:player.id||'',
@@ -3450,8 +3433,8 @@ age:player.age||'',
 exp:player.experience?player.experience.years:0,
 status:player.status?player.status.type:'active',
 headshot:player.headshot?player.headshot.href:'',
-starter:!!starterIds[player.id],
-depth:depthOrder[player.id]||99,
+starter:idx===0,
+depth:idx+1,
 statCats:pStats?pStats.cats:{},
 gamesPlayed:pStats?pStats.games:0
 };
@@ -3469,13 +3452,17 @@ else if(p.pos==='P')roster.p.push(p);
 });
 }
 
+/* Sort: players with most stats first, use as proxy for starters */
 for(var key in roster){
 if(key==='gamesPlayed')continue;
 roster[key].sort(function(a,b){
-if(a.starter&&!b.starter)return -1;
-if(!a.starter&&b.starter)return 1;
+var aStats=a.statCats?Object.keys(a.statCats).length:0;
+var bStats=b.statCats?Object.keys(b.statCats).length:0;
+if(bStats!==aStats)return bStats-aStats;
 return a.depth-b.depth;
 });
+/* Mark first player at each position as starter */
+if(roster[key].length>0)roster[key][0].starter=true;
 }
 
 NFLRosterCache[teamId]=roster;
