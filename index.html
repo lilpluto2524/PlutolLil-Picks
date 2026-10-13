@@ -1158,7 +1158,9 @@ status:status,
 statusDetail:ev.status&&ev.status.type?ev.status.type.shortDetail:'',
 date:ev.date,
 venue:comp.venue?comp.venue.fullName:'',
-broadcast:comp.broadcasts&&comp.broadcasts[0]&&comp.broadcasts[0].names?comp.broadcasts[0].names[0]:''
+broadcast:comp.broadcasts&&comp.broadcasts&&comp.broadcasts.names?comp.broadcasts.names:'',
+hLine:hTeam.linescores||[],
+aLine:aTeam.linescores||[]
 };
 }
 
@@ -2066,8 +2068,27 @@ h+='</div>';
 h+='<div class="tc">'+nflTeamImg(g.aId)+'<div class="ta" style="color:'+nflTeamClr(g.aId)+'">'+g.aI.a+'</div><div class="tr">'+g.aRec+'</div><div style="font-size:9px;color:#888">AWAY</div></div>';
 h+='</div>';
 
-var scoreLabel=(g.pg.status==='final')?'FINAL: '+g.hI.a+' '+g.pg.hScore+' - '+g.aI.a+' '+g.pg.aScore:g.hI.a+' '+g.bl.hSc+' - '+g.aI.a+' '+g.bl.aSc;
+
+/* Quarter-by-Quarter Scoreboard */
+if((g.pg.status==='final'||g.pg.status==='live')&&g.pg.hLine&&g.pg.hLine.length>0){
+var qH='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0;margin:4px 0;text-align:center">';
+qH+='<tr style="color:#888;font-weight:600;border-bottom:1px solid rgba(137,207,240,.1)"><td></td><td>Q1</td><td>Q2</td><td>Q3</td><td>Q4</td>';
+if(g.pg.hLine.length>4)qH+='<td>OT</td>';
+qH+='<td style="color:#ffd54f;font-weight:800">T</td></tr>';
+qH+='<tr style="border-bottom:1px solid rgba(137,207,240,.05)"><td style="font-weight:700;color:'+nflTeamClr(g.hId)+'">'+g.hI.a+'</td>';
+g.pg.hLine.forEach(function(q){qH+='<td>'+q.displayValue+'</td>';});
+qH+='<td style="font-weight:800;color:#ffd54f">'+g.pg.hScore+'</td></tr>';
+qH+='<tr><td style="font-weight:700;color:'+nflTeamClr(g.aId)+'">'+g.aI.a+'</td>';
+g.pg.aLine.forEach(function(q){qH+='<td>'+q.displayValue+'</td>';});
+qH+='<td style="font-weight:800;color:#ffd54f">'+g.pg.aScore+'</td></tr>';
+qH+='</table>';
+if(g.pg.status==='final')qH+='<div style="text-align:center;font-size:9px;color:#888;font-weight:600">FINAL</div>';
+else qH+='<div style="text-align:center;font-size:9px;color:#66bb6a;font-weight:600">'+g.pg.statusDetail+'</div>';
+h+=qH;
+}else{
+var scoreLabel=g.hI.a+' '+g.bl.hSc+' - '+g.aI.a+' '+g.bl.aSc;
 h+='<div style="text-align:center;font-size:10px;margin:4px 0"><strong>'+scoreLabel+'</strong></div>';
+}
 var nTrk=nflTrk.d.p.find(function(x){return x.g===g.gpk;});
 var nSpBdr='rgba(137,207,240,.3)',nOuBdr='rgba(137,207,240,.3)',nMlBdr='rgba(137,207,240,.3)';
 if(nTrk&&nTrk.w!==null){if(nTrk.w)nMlBdr='#66bb6a';else nMlBdr='#ef5350';if(nTrk.bl&&nTrk.bl.spW===true)nSpBdr='#66bb6a';else if(nTrk.bl&&nTrk.bl.spW===false)nSpBdr='#ef5350';if(nTrk.bl&&nTrk.bl.ouW===true)nOuBdr='#66bb6a';else if(nTrk.bl&&nTrk.bl.ouW===false)nOuBdr='#ef5350';}
@@ -2840,22 +2861,6 @@ if(SPORT==='mlb'){viewDate.setDate(viewDate.getDate()+1);document.getElementById
 else if(NFL_WEEK<18){NFL_WEEK++;fetchCache={};loadNFLGames();}
 }
 });
-}
-
-/* --- Swipe Navigation (Mobile) --- */
-function setupSwipe(){
-document.addEventListener('touchstart',function(e){swipeStartX=e.touches[0].clientX;},{passive:true});
-document.addEventListener('touchend',function(e){
-var diff=e.changedTouches[0].clientX-swipeStartX;
-if(Math.abs(diff)<80)return;
-if(diff>0){
-if(SPORT==='mlb'){viewDate.setDate(viewDate.getDate()-1);document.getElementById('dn-label').textContent=fmtLabel(viewDate);fetchCache={};loadGames();}
-else if(NFL_WEEK>1){NFL_WEEK--;fetchCache={};loadNFLGames();}
-}else{
-if(SPORT==='mlb'){viewDate.setDate(viewDate.getDate()+1);document.getElementById('dn-label').textContent=fmtLabel(viewDate);fetchCache={};loadGames();}
-else if(NFL_WEEK<18){NFL_WEEK++;fetchCache={};loadNFLGames();}
-}
-},{passive:true});
 }
 
 /* --- Auto Midnight Advance --- */
