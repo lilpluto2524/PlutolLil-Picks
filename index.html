@@ -1164,14 +1164,13 @@ aLine:aTeam.linescores||[]
 };
 }
 
-
 async function nflGetTeamStats(teamId){
 try{
-
 var statData=await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/'+teamId+'/statistics?season=2026&seasontype=2').then(function(r){return r.json();});
-var teamData=null;
-try{teamData=await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard').then(function(r){return r.json();});}catch(e){teamData=null;}
 
+/* NEW: Fetch team schedule for papg, pdiff, streak, rest */
+var schedData=null;
+try{schedData=await fetch('https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams/'+teamId+'/schedule?season=2026&seasontype=2').then(function(r){return r.json();});}catch(e){schedData=null;}
 
 var stats={ppg:22,papg:22,ypg:340,yapg:340,passYapg:230,rushYapg:110,rushYpg:120,passYpg:220,turnovers:15,thirdPct:40,rzPct:55,sacks:30,penYpg:50,streak:0,pdiff:0,dvoa:0,sos:0.5,rest:7,w:0,l:0};
 var gamesPlayed=4;
@@ -1185,93 +1184,137 @@ var catName=(cat.name||'').toLowerCase();
 var n=s.name||'';
 var v=parseFloat(s.value)||0;
 
-/* Games played */
 if(n==='teamGamesPlayed'&&v>0)gamesPlayed=v;
-
-/* Offensive stats (from passing/rushing categories) */
 if(n==='totalPointsPerGame')stats.ppg=v;
-if(n==='yardsPerGame')stats.ypg=v;
-if(n==='rushingYardsPerGame'&&catName!=='defensive')stats.rushYpg=v;
-if(n==='netPassingYardsPerGame'&&catName!=='defensive')stats.passYpg=v;
-
-/* NEW: Defensive run/pass splits (yards ALLOWED per game) */
-if(catName==='defensive'){
-if(n==='passingYardsPerGame'||n==='netPassingYardsPerGame'||n==='passingYardsPerGameAllowed')stats.passYapg=v;
-if(n==='rushingYardsPerGame'||n==='rushingYardsPerGameAllowed')stats.rushYapg=v;
-if(n==='yardsPerGame'||n==='totalYardsPerGameAllowed')stats.yapg=v;
-}
-
-/* Miscellaneous */
+if(n==='yardsPerGame'&&catName==='passing')stats.ypg=v;
+if(n==='rushingYardsPerGame'&&catName==='rushing')stats.rushYpg=v;
+if(n==='netPassingYardsPerGame'||n==='passingYardsPerGame'&&catName==='passing')stats.passYpg=v;
 if(n==='thirdDownConvPct')stats.thirdPct=v;
-if(n==='redzoneScoringPct'||n==='redzoneEfficiencyPct')stats.rzPct=v;
+if(n==='redzoneScoringPct')stats.rzPct=v;
+if(n==='redzoneEfficiencyPct'&&stats.rzPct===55)stats.rzPct=v;
 if(n==='totalGiveaways')stats.turnovers=v;
 if(n==='turnOverDifferential')stats._toDiff=v;
 if(n==='totalPenaltyYards')stats.penYpg=gamesPlayed>0?v/gamesPlayed:v;
-
-/* Defensive stats */
 if(n==='sacks'&&catName==='defensive')stats.sacks=v;
-if(n==='tacklesForLoss'&&catName==='defensive')stats.tfl=v;
 });
 });
 }
 
-/* --- Parse team record for W-L, papg, pdiff, streak --- */
-if(teamData&&teamData.team&&teamData.team.record&&teamData.team.record.items){
-teamData.team.record.items.forEach(function(rec){
-if(rec.type==='total'&&rec.stats){
-rec.stats.forEach(function(s){
-if(s.name==='wins')stats.w=s.value;
-if(s.name==='losses')stats.l=s.value;
-if(s.name==='gamesPlayed')gamesPlayed=s.value;
-if(s.name==='avgPointsAgainst')stats.papg=s.value;
-if(s.name==='avgPointsFor'&&stats.ppg===22)stats.ppg=s.value;
-if(s.name==='pointDifferential')stats.pdiff=s.value;
-if(s.name==='differential')stats.pdiff=s.value;
-if(s.name==='streak')stats.streak=s.value;
-if(s.name==='pointsFor')stats._pf=s.value;
-if(s.name==='pointsAgainst')stats._pa=s.value;
+/* --- Parse schedule for papg, pdiff, streak, rest, w, l --- */
+if(schedData&&schedData.events){
+var totalPF=0,totalPA=0,wins=0,losses=0,streak=0,lastResult='';
+var lastGameDate=null;
+var completedGames=[];
+
+schedData.events.forEach(function(ev){
+var comp=ev.competitions&&ev.competitions[0];
+if(!comp)return;
+var home=null,away=null;
+(comp.competitors||[]).forEach(function(c){
+if(c.homeAway==='home')home=c;
+else away=c;
 });
+if(!home||!away)return;
+
+/* Figure out which is our team */
+var isHome=home.team&&home.team.id==String(teamId);
+var myTeam=isHome?home:away;
+var oppTeam=isHome?away:home;
+
+/* Check if game is completed (winner field exists) */
+if(myTeam.winner===undefined&&oppTeam.winner===undefined)return;
+
+var myScore=myTeam.score?myTeam.score.value||parseInt(myTeam.score.displayValue)||0:0;
+var oppScore=oppTeam.score?oppTeam.score.value||parseInt(oppTeam.score.displayValue)||0:0;
+
+if(myScore===0&&oppScore===0)return;
+
+totalPF+=myScore;
+totalPA+=oppScore;
+var won=myTeam.winner===true;
+if(won)wins++;else losses++;
+
+/* Streak calc */
+var thisResult=won?'W':'L';
+if(lastResult===''||lastResult===thisResult){
+streak+=(won?1:-1);
+}else{
+streak=won?1:-1;
 }
+lastResult=thisResult;
+
+/* Track game date for rest calculation */
+if(ev.date)lastGameDate=ev.date;
+
+/* Track opponent records for SOS */
+completedGames.push({
+oppId:oppTeam.team?oppTeam.team.id:null,
+oppRecord:oppTeam.record||[],
+won:won
 });
+});
+
+var gp=wins+losses;
+if(gp>0){
+gamesPlayed=gp;
+stats.ppg=totalPF/gp;
+stats.papg=totalPA/gp;
+stats.pdiff=totalPF-totalPA;
+stats.w=wins;
+stats.l=losses;
+stats.streak=streak;
 }
 
-/* Calculate yapg from papg approximation (yards correlate with points) */
-/* ESPN doesn't give yards allowed directly in these endpoints */
-/* Approximate: avg NFL team allows ~340 ypg, scale by papg ratio */
-if(stats.papg>0&&stats.papg!==22){
+/* Calculate rest days from last game */
+if(lastGameDate){
+var lastDate=new Date(lastGameDate);
+var now=new Date();
+var diffDays=Math.floor((now-lastDate)/(1000*60*60*24));
+stats.rest=Math.max(1,Math.min(14,diffDays));
+}
+
+/* Calculate SOS from opponent records */
+if(completedGames.length>0){
+var oppWins=0,oppGames=0;
+completedGames.forEach(function(cg){
+if(cg.oppRecord&&cg.oppRecord.length>0){
+var recStr=cg.oppRecord[0].displayValue||'0-0';
+var parts=recStr.split('-');
+var ow=parseInt(parts[0])||0;
+var ol=parseInt(parts[1])||0;
+oppWins+=ow;
+oppGames+=ow+ol;
+}
+});
+if(oppGames>0)stats.sos=oppWins/oppGames;
+}
+
+/* Calculate yapg from papg (ESPN doesn't give defensive yards in this endpoint) */
+if(stats.papg!==22){
 stats.yapg=340*(stats.papg/22);
+stats.passYapg=230*(stats.papg/22);
+stats.rushYapg=110*(stats.papg/22);
 }
 
-/* Calculate rest days (approximate from schedule) */
-/* Default to 7 if we can't determine */
-/* NEW: Fallback for defensive splits if ESPN didn't provide them */
-if(stats.passYapg===230&&stats.rushYapg===110&&stats.papg!==22){
-var scale=stats.papg/22;
-stats.passYapg=230*scale;
-stats.rushYapg=110*scale;
-}
-/* Guard rails — keep splits in a sane NFL range */
+/* Guard rails */
+stats.yapg=Math.max(200,Math.min(500,stats.yapg));
 stats.passYapg=Math.max(140,Math.min(330,stats.passYapg));
 stats.rushYapg=Math.max(70,Math.min(190,stats.rushYapg));
-stats.rest=7;
+}
 
-/* Strength of schedule from point differential */
+/* DVOA estimate from point differential per game */
 if(gamesPlayed>0&&stats.pdiff!==0){
-stats.sos=0.5+(stats.pdiff/(gamesPlayed*20))*0.1;
-if(stats.sos>1)stats.sos=1;
-if(stats.sos<0)stats.sos=0;
+stats.dvoa=stats.pdiff/(gamesPlayed*10);
+stats.dvoa=Math.max(-0.5,Math.min(0.5,stats.dvoa));
 }
 
 /* Clean up temp fields */
 delete stats._toDiff;
-delete stats._pf;
-delete stats._pa;
-delete stats.tfl;
 
 return stats;
 }catch(e){
 console.warn('nflGetTeamStats error for team '+teamId+':',e);
-return{ppg:22,papg:22,ypg:340,yapg:340,rushYpg:120,passYpg:220,turnovers:15,thirdPct:40,rzPct:55,sacks:30,penYpg:50,streak:0,pdiff:0,dvoa:0,sos:0.5,rest:7,w:0,l:0};
+return{ppg:22,papg:22,ypg:340,yapg:340,rushYpg:120,passYpg:220,passYapg:230,rushYapg:110,turnovers:15,thirdPct:40,rzPct:55,sacks:30,penYpg:50,streak:0,pdiff:0,dvoa:0,sos:0.5,rest:7,w:0,l:0};
 }
 }
 
