@@ -228,7 +228,20 @@ body.light .bx{border-color:rgba(0,0,0,.06);}
 .gc table td span[style*="font-size:7px"]{font-size:7px!important;}
 }
 
-
+/* ===== MLB MOBILE FIX — Game Card Panels ===== */
+@media screen and (max-width:480px){
+.gc{width:100% !important;min-width:0 !important;max-width:100% !important;box-sizing:border-box !important;}
+.gc table{display:block !important;overflow-x:auto !important;white-space:nowrap !important;max-width:100% !important;-webkit-overflow-scrolling:touch !important;}
+.gc table tr{display:table-row !important;}
+.gc table td,.gc table th{font-size:8px !important;padding:2px 3px !important;max-width:80px !important;overflow:hidden !important;text-overflow:ellipsis !important;}
+.gc .xb{font-size:8px !important;padding:3px 5px !important;margin:1px !important;}
+.gc div[style*="display:flex"]{flex-wrap:wrap !important;}
+.gc div[style*="display: flex"]{flex-wrap:wrap !important;}
+.gc div[style*="overflow"]{overflow-x:auto !important;-webkit-overflow-scrolling:touch !important;}
+.gc div[style*="flex:1"]{flex:none !important;width:100% !important;min-width:0 !important;}
+.gc img[style*="border-radius"]{width:28px !important;height:28px !important;}
+.gc td:nth-child(2){max-width:70px !important;overflow:hidden !important;text-overflow:ellipsis !important;}
+}
 
 </style>
 </head>
