@@ -2340,10 +2340,16 @@ h+='</div>';
 el.innerHTML=h;
 }
 
+
 /* --- Parlays Tab --- */
 function renderParlays(){
 var el=document.getElementById('tp-py');
-var h='<div class="trk"><div class="trk-title">Parlay History</div>';
+var h='<div class="trk">';
+
+/* ===== SECTION 1: Parlay History (existing) ===== */
+h+='<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.min-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\'">';
+h+='<div class="trk-title">📋 Parlay History</div><span class="min-arrow" style="color:#89CFF0;font-size:12px">▼</span></div>';
+h+='<div>';
 if(PM.d.parlays.length===0){
 h+='<div class="no-data">No parlays saved yet. Add picks from game cards to build parlays.</div>';
 }else{
@@ -2367,10 +2373,356 @@ h+='</div>';
 }
 h+='<div style="text-align:center;margin:12px 0"><button class="rst-btn" id="pm-reset">Reset Parlays</button></div>';
 h+='</div>';
+
+/* ===== SECTION 2: Auto-Suggest Parlay Builder ===== */
+if(SPORT==='nfl'){
+h+='<div id="parlay-builder-section">';
+h+='<div style="text-align:center;margin:12px 0"><button class="xb" id="build-parlays-btn" style="background:#89CFF0;color:#0a0a23;font-weight:800;padding:8px 16px;border-radius:6px;font-size:11px">🏈 Generate Smart Parlays</button></div>';
+h+='<div id="parlay-builder-results"></div>';
+h+='</div>';
+}
+
+h+='</div>';
 el.innerHTML=h;
+
 document.getElementById('pm-reset').addEventListener('click',function(){
 if(confirm('Reset all parlay history?')){PM.reset();renderParlays();}
 });
+
+/* Wire up parlay builder button */
+var buildBtn=document.getElementById('build-parlays-btn');
+if(buildBtn){
+buildBtn.addEventListener('click',function(){
+buildBtn.textContent='⏳ Crunching matchups...';
+buildBtn.disabled=true;
+generateSmartParlays().then(function(){
+buildBtn.textContent='🏈 Refresh Smart Parlays';
+buildBtn.disabled=false;
+});
+});
+}
+}
+
+/* ===== SMART PARLAY GENERATOR ===== */
+async function generateSmartParlays(){
+var resultsEl=document.getElementById('parlay-builder-results');
+if(!resultsEl)return;
+resultsEl.innerHTML='<div class="ld"><div class="spin"></div> Analyzing all matchups...</div>';
+
+try{
+var sb=await fetch('https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week='+NFL_WEEK+'&seasontype=2').then(function(r){return r.json();});
+if(!sb||!sb.events)return;
+
+var matchups=[];
+(sb.events||[]).forEach(function(ev){
+var comp=ev.competitions&&ev.competitions[0];
+if(!comp)return;
+var home=null,away=null;
+(comp.competitors||[]).forEach(function(c){
+var info={id:c.team.id,abbr:c.team.abbreviation,name:c.team.displayName||c.team.name};
+if(c.homeAway==='home')home=info;else away=info;
+});
+if(home&&away)matchups.push({home:home,away:away});
+});
+
+/* Fetch all rosters + stats */
+var allIds=[];
+matchups.forEach(function(m){
+if(allIds.indexOf(m.home.id)<0)allIds.push(m.home.id);
+if(allIds.indexOf(m.away.id)<0)allIds.push(m.away.id);
+});
+
+var sMap={},rMap={},iMap={};
+await Promise.all(allIds.map(async function(tid){
+var r=await Promise.all([
+nflGetTeamStats(tid).catch(function(){return{papg:22,yapg:340};}),
+fetchNFLRoster(tid).catch(function(){return{qb:[],rb:[],wr:[],te:[],k:[],gamesPlayed:0};}),
+fetchNFLInjuries(tid).catch(function(){return[];})
+]);
+sMap[tid]=r[0];rMap[tid]=r[1];iMap[tid]=r[2];
+}));
+
+/* Build all prop legs */
+var allLegs=[];
+var allTDLegs=[];
+
+matchups.forEach(function(m){
+var hS=sMap[m.home.id]||{};var aS=sMap[m.away.id]||{};
+var hR=rMap[m.home.id]||{};var aR=rMap[m.away.id]||{};
+var hI=iMap[m.home.id]||[];var aI=iMap[m.away.id]||[];
+
+/* Get wx */
+var wxF=0;
+var gc=window._plpNFLCache||[];
+gc.forEach(function(g){if(g.hI&&g.hI.a===m.home.abbr){wxF=g.pred&&g.pred.f?g.pred.f.wx||0:0;}});
+hS.wxFactor=wxF;aS.wxFactor=wxF;
+
+/* Calc totals + enrich */
+function cT(roster){
+var ra=0,tg=0;
+['qb','rb','wr','te'].forEach(function(pos){(roster[pos]||[]).forEach(function(p){
+if(p.statCats){
+if(p.statCats.rushing){var rt=p.statCats.rushing.totals||[];if(rt[0])ra+=(rt[0].val||rt[0].num||0);}
+if(p.statCats.receiving){var rc=p.statCats.receiving.totals||[];if(rc[5])tg+=(rc[5].val||rc[5].num||0);else if(rc[0])tg+=(rc[0].val||rc[0].num||0);}
+}
+});});
+return{rushAtt:ra,targets:tg};
+}
+var hT=cT(hR);var aT=cT(aR);
+function enrich(roster,ta,oa,tot,inj){
+['qb','rb','wr','te','k'].forEach(function(pos){(roster[pos]||[]).forEach(function(p){
+p._teamAbbr=ta;p._oppAbbr=oa;p._teamRushAtt=tot.rushAtt;p._teamTargets=tot.targets;p._injuredTeammates=inj;
+});});
+}
+enrich(hR,m.home.abbr,m.away.abbr,hT,hI);
+enrich(aR,m.away.abbr,m.home.abbr,aT,aI);
+
+function processLegs(roster,tAbbr,oAbbr,tStats,oStats,gameLabel){
+['qb','rb','wr','te'].forEach(function(pk){
+(roster[pk]||[]).forEach(function(p){
+if(!p.statCats||Object.keys(p.statCats).length===0||!p.starter)return;
+
+/* Props */
+var props=calcPlayerProps(p,tStats,oStats);
+if(props.lines&&props.lines.length>0){
+var bestLine=null;var bestDiff=-999;
+props.lines.forEach(function(l){
+if(l.avg>0){var diff=(l.projected/l.avg-1)*100;if(diff>bestDiff){bestDiff=diff;bestLine=l;}}
+});
+if(bestLine&&bestDiff>2){
+allLegs.push({
+name:p.name,pos:p.pos,team:tAbbr,opp:oAbbr,game:gameLabel,
+prop:bestLine.prop,avg:bestLine.avg,projected:bestLine.projected,
+diff:bestDiff,matchup:props.matchup,confidence:props.confidence||'MED',
+corr:tAbbr+'_'+p.pos
+});
+}
+}
+
+/* TDs */
+var td=calcAnytimeTDProb(p,tStats.rzPct||55,oStats.papg||22);
+if(td.prob>=0.20){
+allTDLegs.push({
+name:p.name,pos:p.pos,team:tAbbr,opp:oAbbr,game:gameLabel,
+prob:td.prob,tdRate:td.tdRate,totalTDs:td.totalTDs,
+confidence:td.confidence||'MED',corr:tAbbr+'_TD'
+});
+}
+});
+});
+}
+var gl=m.home.abbr+' vs '+m.away.abbr;
+processLegs(hR,m.home.abbr,m.away.abbr,hS,aS,gl);
+processLegs(aR,m.away.abbr,m.home.abbr,aS,hS,gl);
+});
+
+/* Sort legs by edge */
+allLegs.sort(function(a,b){return b.diff-a.diff;});
+allTDLegs.sort(function(a,b){return b.prob-a.prob;});
+
+/* ===== BUILD PARLAYS ===== */
+var sgpParlays=[];
+var crossParlays=[];
+var tdParlays=[];
+
+/* --- SGP: Same Game Parlays (2-3 legs from same game) --- */
+var gameMap={};
+allLegs.forEach(function(l){if(!gameMap[l.game])gameMap[l.game]=[];gameMap[l.game].push(l);});
+Object.keys(gameMap).forEach(function(game){
+var legs=gameMap[game];
+if(legs.length<2)return;
+/* 2-leg SGP: top 2 from same game, avoid correlation */
+for(var i=0;i<Math.min(legs.length,3);i++){
+for(var j=i+1;j<Math.min(legs.length,4);j++){
+var l1=legs[i],l2=legs[j];
+var correlated=(l1.team===l2.team&&((l1.pos==='QB'&&l2.pos==='WR')||(l1.pos==='QB'&&l2.pos==='TE')||(l1.pos==='WR'&&l2.pos==='QB')||(l1.pos==='TE'&&l2.pos==='QB')));
+var avgConf=(l1.diff+l2.diff)/2;
+sgpParlays.push({
+game:game,legs:[l1,l2],avgEdge:avgConf,correlated:correlated,
+legCount:2,impliedProb:Math.max(0.05,0.55*0.55)
+});
+}
+}
+/* 3-leg SGP */
+if(legs.length>=3){
+sgpParlays.push({
+game:game,legs:legs.slice(0,3),avgEdge:(legs[0].diff+legs[1].diff+legs[2].diff)/3,
+correlated:true,legCount:3,impliedProb:Math.max(0.03,0.50*0.50*0.50)
+});
+}
+});
+sgpParlays.sort(function(a,b){return b.avgEdge-a.avgEdge;});
+
+/* --- Cross-Game Parlays: best legs from different games --- */
+if(allLegs.length>=2){
+/* 2-leg cross */
+var used={};
+var crossLegs2=[];
+allLegs.forEach(function(l){
+if(crossLegs2.length>=2)return;
+if(!used[l.game]){used[l.game]=true;crossLegs2.push(l);}
+});
+if(crossLegs2.length>=2){
+crossParlays.push({legs:crossLegs2,avgEdge:(crossLegs2[0].diff+crossLegs2[1].diff)/2,legCount:2,impliedProb:0.55*0.55});
+}
+/* 3-leg cross */
+used={};var crossLegs3=[];
+allLegs.forEach(function(l){
+if(crossLegs3.length>=3)return;
+if(!used[l.game]){used[l.game]=true;crossLegs3.push(l);}
+});
+if(crossLegs3.length>=3){
+crossParlays.push({legs:crossLegs3,avgEdge:(crossLegs3[0].diff+crossLegs3[1].diff+crossLegs3[2].diff)/3,legCount:3,impliedProb:0.50*0.50*0.50});
+}
+/* 4-leg cross */
+used={};var crossLegs4=[];
+allLegs.forEach(function(l){
+if(crossLegs4.length>=4)return;
+if(!used[l.game]){used[l.game]=true;crossLegs4.push(l);}
+});
+if(crossLegs4.length>=4){
+crossParlays.push({legs:crossLegs4,avgEdge:(crossLegs4[0].diff+crossLegs4[1].diff+crossLegs4[2].diff+crossLegs4[3].diff)/4,legCount:4,impliedProb:0.45*0.45*0.45*0.45});
+}
+}
+
+/* --- TD Parlays: combine top Anytime TD picks --- */
+if(allTDLegs.length>=2){
+/* 2-leg TD */
+tdParlays.push({legs:allTDLegs.slice(0,2),avgProb:(allTDLegs[0].prob+allTDLegs[1].prob)/2,legCount:2,impliedProb:allTDLegs[0].prob*allTDLegs[1].prob});
+/* 3-leg TD */
+if(allTDLegs.length>=3){
+tdParlays.push({legs:allTDLegs.slice(0,3),avgProb:(allTDLegs[0].prob+allTDLegs[1].prob+allTDLegs[2].prob)/3,legCount:3,impliedProb:allTDLegs[0].prob*allTDLegs[1].prob*allTDLegs[2].prob});
+}
+/* 4-leg TD */
+if(allTDLegs.length>=4){
+tdParlays.push({legs:allTDLegs.slice(0,4),avgProb:(allTDLegs[0].prob+allTDLegs[1].prob+allTDLegs[2].prob+allTDLegs[3].prob)/4,legCount:4,impliedProb:allTDLegs[0].prob*allTDLegs[1].prob*allTDLegs[2].prob*allTDLegs[3].prob});
+}
+}
+
+/* ===== RENDER RESULTS ===== */
+var h='';
+
+/* Helper: implied odds display */
+function fmtOdds(prob){
+if(prob>=0.5)return '-'+Math.round(prob/(1-prob)*100);
+return '+'+Math.round((1-prob)/prob*100);
+}
+
+/* Helper: confidence color */
+function confClr(matchup){
+return matchup==='SMASH'?'#66bb6a':matchup==='GOOD'?'#4fc3f7':matchup==='NEUTRAL'?'#ffd54f':matchup==='TOUGH'?'#ffa726':'#ef5350';
+}
+
+
+/* --- SGP Section (Every Game) --- */
+h+='<div style="margin-top:12px">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.min-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\'">';
+h+='<div style="font-size:12px;font-weight:900;color:#89CFF0">🎯 Same Game Parlays (SGP)</div><span class="min-arrow" style="color:#89CFF0;font-size:12px">▼</span></div>';
+h+='<div>';
+h+='<div style="font-size:8px;color:#888;margin:4px 0">Props from the same game combined | ⚡ = correlated legs (move together)</div>';
+
+/* Group SGPs by game */
+var sgpByGame={};
+sgpParlays.forEach(function(p){
+if(!sgpByGame[p.game])sgpByGame[p.game]=[];
+sgpByGame[p.game].push(p);
+});
+
+var gameNames=Object.keys(sgpByGame);
+if(gameNames.length===0){h+='<div class="no-data">Not enough data for SGPs</div>';}
+gameNames.forEach(function(game){
+var parlays=sgpByGame[game];
+var bestEdge=0;
+parlays.forEach(function(p){if(p.avgEdge>bestEdge)bestEdge=p.avgEdge;});
+var bestClr=bestEdge>=10?'#66bb6a':bestEdge>=5?'#ffd54f':'#ffa726';
+
+/* Each game is collapsible */
+h+='<div style="margin:6px 0;border:1px solid rgba(137,207,240,.1);border-radius:6px;overflow:hidden">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:rgba(137,207,240,.05);cursor:pointer" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.min-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\'">';
+h+='<span style="font-size:10px;font-weight:800;color:#89CFF0">'+game+'</span>';
+h+='<span style="font-size:8px"><span style="color:'+bestClr+';font-weight:700">Best: +'+bestEdge.toFixed(1)+'%</span> | <span style="color:#888">'+parlays.length+' combos</span> <span class="min-arrow" style="color:#89CFF0;font-size:10px">▼</span></span>';
+h+='</div>';
+h+='<div style="padding:4px 8px">';
+
+parlays.forEach(function(p,idx){
+var edgeClr=p.avgEdge>=10?'#66bb6a':p.avgEdge>=5?'#ffd54f':'#ffa726';
+h+='<div style="padding:6px 0;'+(idx<parlays.length-1?'border-bottom:1px solid rgba(137,207,240,.06)':'')+'">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">';
+h+='<span style="font-size:9px;font-weight:700;color:#ffd54f">'+p.legCount+'-Leg SGP</span>';
+h+='<span style="font-size:8px">';
+h+='<span style="color:'+edgeClr+';font-weight:700">+'+p.avgEdge.toFixed(1)+'% edge</span>';
+h+=' | <span style="color:#888">'+fmtOdds(p.impliedProb)+'</span>';
+if(p.correlated)h+=' <span style="color:#ffa726" title="Correlated legs — these props move together">⚡</span>';
+h+='</span></div>';
+p.legs.forEach(function(l){
+var mClr=confClr(l.matchup);
+h+='<div style="font-size:9px;padding:1px 0;display:flex;justify-content:space-between">';
+h+='<span><span style="color:#ffd54f;font-weight:700">'+l.pos+'</span> '+l.name+' <span style="color:#888">('+l.team+')</span></span>';
+h+='<span>O '+l.avg.toFixed(1)+' '+l.prop+' <span style="color:'+mClr+';font-weight:700">→ '+l.projected.toFixed(1)+'</span> <span style="color:#66bb6a;font-size:7px">+'+l.diff.toFixed(0)+'%</span></span>';
+h+='</div>';
+});
+h+='</div>';
+});
+
+h+='</div></div>';
+});
+
+h+='</div></div>';
+
+/* --- Cross-Game Section --- */
+h+='<div style="margin-top:12px">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.min-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\'">';
+h+='<div style="font-size:12px;font-weight:900;color:#89CFF0">🔥 Cross-Game Parlays</div><span class="min-arrow" style="color:#89CFF0;font-size:12px">▼</span></div>';
+h+='<div>';
+h+='<div style="font-size:8px;color:#888;margin:4px 0">Best props from different games | Higher confidence, no correlation risk</div>';
+if(crossParlays.length===0){h+='<div class="no-data">Not enough data for cross-game parlays</div>';}
+crossParlays.forEach(function(p,idx){
+var edgeClr=p.avgEdge>=10?'#66bb6a':p.avgEdge>=5?'#ffd54f':'#ffa726';
+h+='<div class="gc" style="padding:8px;margin:4px 0">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center">';
+h+='<span style="font-size:10px;font-weight:800;color:#66bb6a">'+p.legCount+'-Leg Power Play</span>';
+h+='<span style="font-size:9px"><span style="color:'+edgeClr+';font-weight:700">+'+p.avgEdge.toFixed(1)+'% avg edge</span> | <span style="color:#888">'+fmtOdds(p.impliedProb)+'</span></span>';
+h+='</div>';
+p.legs.forEach(function(l){
+var mClr=confClr(l.matchup);
+h+='<div style="font-size:9px;padding:2px 0;display:flex;justify-content:space-between">';
+h+='<span><span style="color:#ffd54f;font-weight:700">'+l.pos+'</span> '+l.name+' <span style="color:#888">('+l.team+' vs '+l.opp+')</span></span>';
+h+='<span>O '+l.avg.toFixed(1)+' '+l.prop+' <span style="color:'+mClr+';font-weight:700">→ '+l.projected.toFixed(1)+'</span></span>';
+h+='</div>';
+});
+h+='</div>';
+});
+h+='</div></div>';
+
+/* --- TD Parlays Section --- */
+h+='<div style="margin-top:12px">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.min-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\'">';
+h+='<div style="font-size:12px;font-weight:900;color:#89CFF0">🏈 Anytime TD Parlays</div><span class="min-arrow" style="color:#89CFF0;font-size:12px">▼</span></div>';
+h+='<div>';
+h+='<div style="font-size:8px;color:#888;margin:4px 0">Top TD scorers combined | Sorted by probability</div>';
+if(tdParlays.length===0){h+='<div class="no-data">Not enough TD data</div>';}
+tdParlays.forEach(function(p,idx){
+var probPct=(p.impliedProb*100).toFixed(1);
+h+='<div class="gc" style="padding:8px;margin:4px 0">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center">';
+h+='<span style="font-size:10px;font-weight:800;color:#ffa726">'+p.legCount+'-Leg TD Parlay</span>';
+h+='<span style="font-size:9px"><span style="color:#ffd54f;font-weight:700">'+probPct+'% hit rate</span> | <span style="color:#888">'+fmtOdds(p.impliedProb)+'</span></span>';
+h+='</div>';
+p.legs.forEach(function(l){
+var probClr=l.prob>=0.55?'#66bb6a':l.prob>=0.35?'#ffd54f':'#ffa726';
+h+='<div style="font-size:9px;padding:2px 0;display:flex;justify-content:space-between">';
+h+='<span><span style="color:#ffd54f;font-weight:700">'+l.pos+'</span> '+l.name+' <span style="color:#888">('+l.team+' vs '+l.opp+')</span></span>';
+h+='<span>ATTS <span style="color:'+probClr+';font-weight:700">'+(l.prob*100).toFixed(1)+'%</span> <span style="color:#888">('+l.tdRate.toFixed(2)+' TD/G)</span></span>';
+h+='</div>';
+});
+h+='</div>';
+});
+h+='</div></div>';
+
+resultsEl.innerHTML=h;
+}catch(e){
+resultsEl.innerHTML='<div class="no-data">Error building parlays: '+e.message+'</div>';
+}
 }
 
 /* --- Analytics Tab --- */
