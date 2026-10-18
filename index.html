@@ -2738,15 +2738,59 @@ resultsEl.innerHTML='<div class="no-data">Error building parlays: '+e.message+'<
 }
 }
 
+
+
 /* --- Analytics Tab --- */
+
+/* ===== ENRICH TRACKER DATA FOR ANALYTICS ===== */
+function enrichTrackerPicks(trk){
+if(!trk||!trk.d||!trk.d.p)return;
+trk.d.p.forEach(function(e){
+/* Infer bet type from bl data if not set */
+if(e.bl&&!e.bl.type){
+/* Each pick is a ML pick since pk = team picked to win */
+e.bl.type='ML';
+}
+/* Also tag spread and O/U as separate trackable items */
+if(e.bl&&!e.bl._enriched){
+e.bl._enriched=true;
+/* Spread result: did the picked team cover? */
+if(e.bl.spread!==undefined&&e.hSc!==null&&e.aSc!==null){
+var pickIsHome=(e.pk===e.hT);
+var margin=pickIsHome?(e.hSc-e.aSc):(e.aSc-e.hSc);
+e.bl._spreadW=pickIsHome?(margin>Math.abs(e.bl.spread)):(margin>Math.abs(e.bl.spread));
+}
+/* O/U result: did total go over or under? */
+if(e.bl.ouLine&&e.hSc!==null&&e.aSc!==null){
+var totalPts=e.hSc+e.aSc;
+e.bl._ouActual=totalPts;
+e.bl._ouW=(e.bl.ouPk==='Over'&&totalPts>e.bl.ouLine)||(e.bl.ouPk==='Under'&&totalPts<e.bl.ouLine);
+}
+}
+/* Infer week from game ID (nfl_401873010 format) or timestamp */
+if(!e.wk&&e.ts){
+/* Estimate NFL week from timestamp */
+/* NFL 2026 Week 1 starts ~Sep 10, 2026 = 1789084800000 */
+var nflStart=1789084800000;
+var weekMs=7*24*60*60*1000;
+var wk=Math.floor((e.ts-nflStart)/weekMs)+1;
+if(wk<1)wk=1;if(wk>18)wk=18;
+e.wk=wk;
+}
+});
+}
+
 function renderAnalytics(){
 var el=document.getElementById('tp-an');
 var trk=SPORT==='mlb'?Trk:nflTrk;
+enrichTrackerPicks(trk);
 var rec=trk.record();
 var total=rec.w+rec.l;
 var h='<div class="trk"><div class="trk-title">Analytics Dashboard</div>';
 if(total<3){h+='<div class="no-data">Need at least 3 completed picks for analytics.</div></div>';el.innerHTML=h;return;}
 var wpct=(rec.w/total*100).toFixed(1);
+
+/* ===== OVERALL PERFORMANCE ===== */
 h+='<div class="report-card"><div class="rc-title">Overall Performance</div>';
 h+='<div class="roi-bar">';
 h+='<div class="roi-box"><div class="rv">'+wpct+'%</div><div class="rl">Win Rate</div></div>';
@@ -2754,17 +2798,117 @@ h+='<div class="roi-box"><div class="rv">'+total+'</div><div class="rl">Total Pi
 h+='<div class="roi-box"><div class="rv">'+rec.w+'</div><div class="rl">Wins</div></div>';
 h+='<div class="roi-box"><div class="rv">'+rec.l+'</div><div class="rl">Losses</div></div>';
 h+='</div></div>';
-var byType={ml:{w:0,l:0},spread:{w:0,l:0},ou:{w:0,l:0},fi:{w:0,l:0}};
+
+/* ===== BY BET TYPE ===== */
+
+var byType={ml:{w:0,l:0},spread:{w:0,l:0},ou:{w:0,l:0},fi:{w:0,l:0},atd:{w:0,l:0},ftd:{w:0,l:0},prop:{w:0,l:0,over:0,under:0}};
+trk.d.p.forEach(function(e){
+if(e.w===null)return;
+if(e.bl){
+/* ML — every pick is a ML pick */
+if(e.bl.type==='ML'){if(e.w)byType.ml.w++;else byType.ml.l++;}
+/* Spread — inferred from enrichment */
+if(e.bl._spreadW!==undefined){if(e.bl._spreadW)byType.spread.w++;else byType.spread.l++;}
+/* O/U — inferred from enrichment */
+if(e.bl._ouW!==undefined){if(e.bl._ouW)byType.ou.w++;else byType.ou.l++;}
+/* FI/YRFI */
+if(e.bl.type==='FI'||e.bl.type==='YRFI'||e.bl.type==='NRFI'){if(e.w)byType.fi.w++;else byType.fi.l++;}
+/* Anytime TD */
+if(e.bl.type==='ATD'||e.bl.type==='Anytime TD'){if(e.w)byType.atd.w++;else byType.atd.l++;}
+/* First TD */
+if(e.bl.type==='FTD'||e.bl.type==='First TD'){if(e.w)byType.ftd.w++;else byType.ftd.l++;}
+/* Props */
+if(e.bl.type==='Prop'||e.bl.type==='PROP'){
+if(e.w)byType.prop.w++;else byType.prop.l++;
+if(e.bl.dir==='over')byType.prop.over++;
+if(e.bl.dir==='under')byType.prop.under++;
+}
+}
+});
+
 trk.d.p.forEach(function(e){
 if(e.w===null)return;
 if(e.bl){
 if(e.bl.type==='ML'){if(e.w)byType.ml.w++;else byType.ml.l++;}
 if(e.bl.type==='Spread'){if(e.w)byType.spread.w++;else byType.spread.l++;}
 if(e.bl.type==='O/U'){if(e.w)byType.ou.w++;else byType.ou.l++;}
-if(e.bl.type==='FI'){if(e.w)byType.fi.w++;else byType.fi.l++;}
+if(e.bl.type==='FI'||e.bl.type==='YRFI'||e.bl.type==='NRFI'){if(e.w)byType.fi.w++;else byType.fi.l++;}
+if(e.bl.type==='ATD'||e.bl.type==='Anytime TD'){if(e.w)byType.atd.w++;else byType.atd.l++;}
+if(e.bl.type==='FTD'||e.bl.type==='First TD'){if(e.w)byType.ftd.w++;else byType.ftd.l++;}
+if(e.bl.type==='Prop'||e.bl.type==='PROP'){
+if(e.w)byType.prop.w++;else byType.prop.l++;
+if(e.bl.dir==='over')byType.prop.over++;
+if(e.bl.dir==='under')byType.prop.under++;
+}
 }
 });
-h+='<div class="report-card"><div class="rc-title">By Confidence Level</div>';
+
+/* Collapsible: By Bet Type */
+h+='<div class="report-card">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.min-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\'">';
+h+='<div class="rc-title">📊 Performance by Bet Type</div><span class="min-arrow" style="color:#89CFF0;font-size:12px">▼</span></div>';
+h+='<div>';
+
+function betRow(label,w,l,emoji){
+var t=w+l;
+var pct=t>0?(w/t*100).toFixed(1):'0.0';
+var clr=t===0?'#888':(parseFloat(pct)>=55?'#66bb6a':parseFloat(pct)>=50?'#ffd54f':'#ef5350');
+return '<div class="trk-row"><span>'+emoji+' '+label+'</span><span style="color:'+clr+';font-weight:700">'+w+'-'+l+' ('+pct+'%)'+(t===0?' — No picks yet':'')+'</span></div>';
+}
+
+h+=betRow('Money Line',byType.ml.w,byType.ml.l,'💰');
+h+=betRow('Spread',byType.spread.w,byType.spread.l,'📏');
+h+=betRow('Over/Under',byType.ou.w,byType.ou.l,'🎯');
+if(SPORT==='mlb'){
+h+=betRow('YRFI/NRFI',byType.fi.w,byType.fi.l,'⚾');
+}
+if(SPORT==='nfl'){
+h+=betRow('Anytime TD',byType.atd.w,byType.atd.l,'🏈');
+h+=betRow('First TD',byType.ftd.w,byType.ftd.l,'🥇');
+h+=betRow('Player Props',byType.prop.w,byType.prop.l,'📋');
+if(byType.prop.over+byType.prop.under>0){
+h+='<div class="trk-row" style="padding-left:20px"><span style="color:#888;font-size:9px">↳ Over calls: '+byType.prop.over+' | Under calls: '+byType.prop.under+'</span></div>';
+}
+}
+
+/* Best & Worst bet type */
+var types=[
+{name:'Money Line',w:byType.ml.w,l:byType.ml.l},
+{name:'Spread',w:byType.spread.w,l:byType.spread.l},
+{name:'Over/Under',w:byType.ou.w,l:byType.ou.l}
+];
+if(SPORT==='mlb')types.push({name:'YRFI/NRFI',w:byType.fi.w,l:byType.fi.l});
+if(SPORT==='nfl'){
+types.push({name:'Anytime TD',w:byType.atd.w,l:byType.atd.l});
+types.push({name:'First TD',w:byType.ftd.w,l:byType.ftd.l});
+types.push({name:'Player Props',w:byType.prop.w,l:byType.prop.l});
+}
+var bestType=null,worstType=null,bestPct=-1,worstPct=101;
+types.forEach(function(t){
+var tot=t.w+t.l;
+if(tot>=2){
+var pct=t.w/tot*100;
+if(pct>bestPct){bestPct=pct;bestType=t;}
+if(pct<worstPct){worstPct=pct;worstType=t;}
+}
+});
+if(bestType){
+h+='<div style="margin-top:8px;padding:6px;background:rgba(102,187,106,.08);border-radius:4px;font-size:9px">';
+h+='<span style="color:#66bb6a;font-weight:800">🏆 Best: '+bestType.name+'</span> — '+bestType.w+'-'+bestType.l+' ('+bestPct.toFixed(1)+'%)';
+h+='</div>';
+}
+if(worstType&&worstType!==bestType){
+h+='<div style="margin-top:4px;padding:6px;background:rgba(239,83,80,.08);border-radius:4px;font-size:9px">';
+h+='<span style="color:#ef5350;font-weight:800">⚠️ Worst: '+worstType.name+'</span> — '+worstType.w+'-'+worstType.l+' ('+worstPct.toFixed(1)+'%)';
+h+='</div>';
+}
+h+='</div></div>';
+
+/* ===== BY CONFIDENCE LEVEL ===== */
+h+='<div class="report-card">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.min-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\'">';
+h+='<div class="rc-title">🎯 By Confidence Level</div><span class="min-arrow" style="color:#89CFF0;font-size:12px">▼</span></div>';
+h+='<div>';
 var hiW=0,hiL=0,mdW=0,mdL=0,loW=0,loL=0;
 trk.d.p.forEach(function(e){
 if(e.w===null)return;
@@ -2775,24 +2919,178 @@ else{if(e.w)loW++;else loL++;}
 h+='<div class="trk-row"><span>High Confidence (>30%)</span><span class="g">'+hiW+'-'+hiL+' ('+(hiW+hiL>0?((hiW/(hiW+hiL)*100).toFixed(0)):0)+'%)</span></div>';
 h+='<div class="trk-row"><span>Medium Confidence (15-30%)</span><span style="color:#ffd54f">'+mdW+'-'+mdL+' ('+(mdW+mdL>0?((mdW/(mdW+mdL)*100).toFixed(0)):0)+'%)</span></div>';
 h+='<div class="trk-row"><span>Low Confidence (<15%)</span><span class="r">'+loW+'-'+loL+' ('+(loW+loL>0?((loW/(loW+loL)*100).toFixed(0)):0)+'%)</span></div>';
+h+='</div></div>';
+
+/* ===== WEEKLY TREND (NFL ONLY) ===== */
+if(SPORT==='nfl'){
+h+='<div class="report-card">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.min-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\'">';
+h+='<div class="rc-title">📅 Weekly Trend</div><span class="min-arrow" style="color:#89CFF0;font-size:12px">▼</span></div>';
+h+='<div>';
+
+/* Group picks by week */
+var weekMap={};
+trk.d.p.forEach(function(e){
+if(e.w===null)return;
+var wk=e.wk||e.week||'?';
+if(!weekMap[wk])weekMap[wk]={w:0,l:0,ml:{w:0,l:0},sp:{w:0,l:0},ou:{w:0,l:0},atd:{w:0,l:0},ftd:{w:0,l:0},prop:{w:0,l:0}};
+if(e.w)weekMap[wk].w++;else weekMap[wk].l++;
+if(e.bl){
+if(e.bl.type==='ML'){if(e.w)weekMap[wk].ml.w++;else weekMap[wk].ml.l++;}
+if(e.bl.type==='Spread'){if(e.w)weekMap[wk].sp.w++;else weekMap[wk].sp.l++;}
+if(e.bl.type==='O/U'){if(e.w)weekMap[wk].ou.w++;else weekMap[wk].ou.l++;}
+if(e.bl.type==='ATD'||e.bl.type==='Anytime TD'){if(e.w)weekMap[wk].atd.w++;else weekMap[wk].atd.l++;}
+if(e.bl.type==='FTD'||e.bl.type==='First TD'){if(e.w)weekMap[wk].ftd.w++;else weekMap[wk].ftd.l++;}
+if(e.bl.type==='Prop'||e.bl.type==='PROP'){if(e.w)weekMap[wk].prop.w++;else weekMap[wk].prop.l++;}
+}
+});
+
+var weeks=Object.keys(weekMap).sort(function(a,b){return parseInt(a)-parseInt(b);});
+if(weeks.length===0){
+h+='<div class="no-data">No weekly data yet. Picks will be grouped by NFL week.</div>';
+}else{
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:#89CFF0;font-weight:600;border-bottom:1px solid rgba(137,207,240,.15)">';
+h+='<td style="padding:3px">Week</td><td style="text-align:center">Overall</td><td style="text-align:center">ML</td><td style="text-align:center">Spread</td><td style="text-align:center">O/U</td><td style="text-align:center">ATD</td><td style="text-align:center">FTD</td><td style="text-align:center">Props</td><td style="text-align:center">Win%</td></tr>';
+
+var runW=0,runL=0;
+weeks.forEach(function(wk,i){
+var d=weekMap[wk];
+var t=d.w+d.l;
+var pct=(d.w/t*100).toFixed(0);
+runW+=d.w;runL+=d.l;
+var runPct=(runW/(runW+runL)*100).toFixed(1);
+var bg=i%2===0?'rgba(137,207,240,.02)':'transparent';
+var pctClr=parseFloat(pct)>=55?'#66bb6a':parseFloat(pct)>=50?'#ffd54f':'#ef5350';
+
+function miniRec(obj){var t2=obj.w+obj.l;return t2===0?'<span style="color:#555">—</span>':'<span style="color:'+(obj.w>=obj.l?'#66bb6a':'#ef5350')+'">'+obj.w+'-'+obj.l+'</span>';}
+
+h+='<tr style="border-bottom:1px solid rgba(137,207,240,.05);background:'+bg+'">';
+h+='<td style="padding:3px;font-weight:700;color:#89CFF0">Wk '+wk+'</td>';
+h+='<td style="text-align:center;font-weight:700">'+d.w+'-'+d.l+'</td>';
+h+='<td style="text-align:center">'+miniRec(d.ml)+'</td>';
+h+='<td style="text-align:center">'+miniRec(d.sp)+'</td>';
+h+='<td style="text-align:center">'+miniRec(d.ou)+'</td>';
+h+='<td style="text-align:center">'+miniRec(d.atd)+'</td>';
+h+='<td style="text-align:center">'+miniRec(d.ftd)+'</td>';
+h+='<td style="text-align:center">'+miniRec(d.prop)+'</td>';
+h+='<td style="text-align:center;font-weight:800;color:'+pctClr+'">'+pct+'%</td>';
+h+='</tr>';
+});
+
+/* Running total row */
+var totalPct=(runW/(runW+runL)*100).toFixed(1);
+var totalClr=parseFloat(totalPct)>=55?'#66bb6a':parseFloat(totalPct)>=50?'#ffd54f':'#ef5350';
+h+='<tr style="border-top:2px solid rgba(137,207,240,.2);font-weight:800">';
+h+='<td style="padding:3px;color:#ffd54f">TOTAL</td>';
+h+='<td style="text-align:center">'+runW+'-'+runL+'</td>';
+h+='<td colspan="6"></td>';
+h+='<td style="text-align:center;color:'+totalClr+'">'+totalPct+'%</td>';
+h+='</tr>';
+h+='</table>';
+
+/* Trend indicator */
+if(weeks.length>=2){
+var lastWk=weekMap[weeks[weeks.length-1]];
+var prevWk=weekMap[weeks[weeks.length-2]];
+var lastPct=lastWk.w/(lastWk.w+lastWk.l)*100;
+var prevPct=prevWk.w/(prevWk.w+prevWk.l)*100;
+var trendDiff=lastPct-prevPct;
+var trendEmoji=trendDiff>0?'📈':'📉';
+var trendClr=trendDiff>0?'#66bb6a':'#ef5350';
+h+='<div style="margin-top:6px;padding:6px;background:rgba(137,207,240,.05);border-radius:4px;font-size:9px">';
+h+='<span style="color:'+trendClr+';font-weight:700">'+trendEmoji+' Week '+weeks[weeks.length-1]+' vs Week '+weeks[weeks.length-2]+': '+(trendDiff>0?'+':'')+trendDiff.toFixed(1)+'%</span>';
 h+='</div>';
-h+='<div class="report-card"><div class="rc-title">Streak Analysis</div>';
-var streak=0,maxStreak=0,curType='';
+}
+}
+h+='</div></div>';
+
+/* ===== PARLAY PERFORMANCE (NFL) ===== */
+h+='<div class="report-card">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.min-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\'">';
+h+='<div class="rc-title">🎰 Parlay Performance</div><span class="min-arrow" style="color:#89CFF0;font-size:12px">▼</span></div>';
+h+='<div>';
+var parlays=PM.d.parlays||[];
+var pyW=0,pyL=0,pyP=0,totalLegs=0,hitLegs=0;
+parlays.forEach(function(p){
+if(p.result==='W')pyW++;
+else if(p.result==='L')pyL++;
+else pyP++;
+if(p.legs){
+totalLegs+=p.legs.length;
+(p.legs||[]).forEach(function(leg){if(leg.result==='W')hitLegs++;});
+}
+});
+var pyTotal=pyW+pyL;
+var pyPct=pyTotal>0?(pyW/pyTotal*100).toFixed(1):'0.0';
+var legPct=totalLegs>0?(hitLegs/totalLegs*100).toFixed(1):'0.0';
+h+='<div class="roi-bar">';
+h+='<div class="roi-box"><div class="rv" style="color:'+(parseFloat(pyPct)>=40?'#66bb6a':'#ef5350')+'">'+pyPct+'%</div><div class="rl">Parlay Win%</div></div>';
+h+='<div class="roi-box"><div class="rv">'+pyW+'-'+pyL+'</div><div class="rl">W-L</div></div>';
+h+='<div class="roi-box"><div class="rv" style="color:#ffd54f">'+pyP+'</div><div class="rl">Pending</div></div>';
+h+='<div class="roi-box"><div class="rv">'+legPct+'%</div><div class="rl">Leg Hit Rate</div></div>';
+h+='</div>';
+
+/* Parlay size breakdown */
+var bySize={2:{w:0,l:0},3:{w:0,l:0},4:{w:0,l:0}};
+parlays.forEach(function(p){
+if(p.result!=='W'&&p.result!=='L')return;
+var sz=p.legs?p.legs.length:0;
+if(sz<=1)return;
+if(sz>4)sz=4;
+if(p.result==='W')bySize[sz].w++;else bySize[sz].l++;
+});
+h+='<div style="margin-top:6px">';
+h+='<div class="trk-row"><span>2-Leg Parlays</span><span>'+(bySize[2].w+bySize[2].l>0?'<span style="color:'+(bySize[2].w>=bySize[2].l?'#66bb6a':'#ef5350')+'">'+bySize[2].w+'-'+bySize[2].l+'</span>':'<span style="color:#555">—</span>')+'</span></div>';
+h+='<div class="trk-row"><span>3-Leg Parlays</span><span>'+(bySize[3].w+bySize[3].l>0?'<span style="color:'+(bySize[3].w>=bySize[3].l?'#66bb6a':'#ef5350')+'">'+bySize[3].w+'-'+bySize[3].l+'</span>':'<span style="color:#555">—</span>')+'</span></div>';
+h+='<div class="trk-row"><span>4+ Leg Parlays</span><span>'+(bySize[4].w+bySize[4].l>0?'<span style="color:'+(bySize[4].w>=bySize[4].l?'#66bb6a':'#ef5350')+'">'+bySize[4].w+'-'+bySize[4].l+'</span>':'<span style="color:#555">—</span>')+'</span></div>';
+h+='</div>';
+h+='</div></div>';
+}
+
+/* ===== STREAK ANALYSIS ===== */
+h+='<div class="report-card">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.min-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\'">';
+h+='<div class="rc-title">🔥 Streak Analysis</div><span class="min-arrow" style="color:#89CFF0;font-size:12px">▼</span></div>';
+h+='<div>';
+var streak=0,maxStreak=0,curType='',maxLStreak=0,lStreak=0;
 trk.d.p.forEach(function(e){
 if(e.w===null)return;
 if(e.w){
 if(curType==='w')streak++;
 else{streak=1;curType='w';}
+lStreak=0;
 }else{
 if(curType==='l')streak++;
 else{streak=1;curType='l';}
+lStreak++;
+if(lStreak>maxLStreak)maxLStreak=lStreak;
 }
 if(curType==='w'&&streak>maxStreak)maxStreak=streak;
 });
 h+='<div class="trk-row"><span>Current Streak</span><span class="'+(curType==='w'?'g':'r')+'">'+streak+(curType==='w'?'W':'L')+'</span></div>';
 h+='<div class="trk-row"><span>Best Win Streak</span><span class="g">'+maxStreak+'W</span></div>';
+h+='<div class="trk-row"><span>Worst Loss Streak</span><span class="r">'+maxLStreak+'L</span></div>';
+
+/* Last 10 picks */
+var last10=trk.d.p.filter(function(e){return e.w!==null;}).slice(-10);
+if(last10.length>0){
+h+='<div style="margin-top:6px;font-size:9px;color:#888">Last 10 picks:</div>';
+h+='<div style="display:flex;gap:3px;margin-top:3px">';
+last10.forEach(function(e){
+var clr=e.w?'#66bb6a':'#ef5350';
+var lbl=e.w?'W':'L';
+h+='<div style="width:22px;height:22px;border-radius:4px;background:'+clr+';color:#fff;font-size:8px;font-weight:800;display:flex;align-items:center;justify-content:center">'+lbl+'</div>';
+});
+h+='</div>';
+}
 h+='</div></div>';
+
+h+='</div>';
 el.innerHTML=h;
+document.getElementById('pm-reset').addEventListener('click',function(){
+if(confirm('Reset all parlay history?')){PM.reset();renderParlays();}
+});
 }
 
 /* --- Reports Tab --- */
@@ -5253,20 +5551,33 @@ if(byeTeams.length===0)return'';
 return'<div style="text-align:center;padding:8px;margin:8px 0;background:rgba(137,207,240,0.08);border:1px solid rgba(137,207,240,0.2);border-radius:8px;font-size:12px;color:#aaa"><span style="color:#ffd54f;font-weight:800">BYE WEEK:</span> '+byeTeams.join(', ')+'</div>';
 }
 
-/* --- Game Time Slot Detection --- */
+
+/* --- Game Time Slot Detection (UTC-aware for ET kickoffs) --- */
 function getNFLSlot(dateStr){
 if(!dateStr)return{label:'',cls:'',badge:''};
 var d=new Date(dateStr);
-var day=d.getUTCDay();
-var hr=d.getUTCHours();
-if(day===4)return{label:'TNF',cls:'slot-tnf',badge:'<span style="background:#ffd54f;color:#000;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">TNF</span>'};
-if(day===1)return{label:'MNF',cls:'slot-mnf',badge:'<span style="background:#42a5f5;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">MNF</span>'};
-if(day===0){
-if(hr>=23||hr>=22)return{label:'SNF',cls:'slot-snf',badge:'<span style="background:#ab47bc;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">SNF</span>'};
-if(hr>=20)return{label:'Late',cls:'slot-late',badge:'<span style="background:#78909c;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">LATE</span>'};
+/* Convert UTC to Eastern (ET = UTC-4 during DST, UTC-5 standard) */
+/* NFL regular season is mostly during EDT (UTC-4) through Nov, then EST (UTC-5) */
+var month=d.getUTCMonth();
+var etOffset=(month>=10)?5:4;
+var etHr=d.getUTCHours()-etOffset;
+var etDay=d.getUTCDay();
+if(etHr<0){etHr+=24;etDay=(etDay+6)%7;}
+
+/* Thursday = TNF */
+if(etDay===4)return{label:'TNF',cls:'slot-tnf',badge:'<span style="background:#ffd54f;color:#000;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">TNF</span>'};
+/* Monday = MNF */
+if(etDay===1)return{label:'MNF',cls:'slot-mnf',badge:'<span style="background:#42a5f5;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">MNF</span>'};
+/* Saturday */
+if(etDay===6)return{label:'SAT',cls:'slot-sat',badge:'<span style="background:#ff7043;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">SAT</span>'};
+/* Sunday */
+if(etDay===0){
+if(etHr>=20)return{label:'SNF',cls:'slot-snf',badge:'<span style="background:#ab47bc;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">SNF</span>'};
+if(etHr>=16)return{label:'Late',cls:'slot-late',badge:'<span style="background:#78909c;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">LATE</span>'};
 return{label:'Early',cls:'slot-early',badge:'<span style="background:#66bb6a;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">EARLY</span>'};
 }
-if(day===6)return{label:'SAT',cls:'slot-sat',badge:'<span style="background:#ff7043;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">SAT</span>'};
+/* Friday (rare international games) */
+if(etDay===5)return{label:'FRI',cls:'slot-fri',badge:'<span style="background:#ef6c00;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px">FRI</span>'};
 return{label:'',cls:'',badge:''};
 }
 
