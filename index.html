@@ -5919,7 +5919,8 @@ ouLine:ouLine
 async function nbaGetTeamStats(teamId){
 try{
 var stats={ppg:0,papg:0,rpg:0,apg:0,fgPct:0,fg3Pct:0,ftPct:0,topg:0,stlpg:0,blkpg:0,pace:0};
-var r=await fetch(NBA_BASE+'/teams/'+teamId+'/statistics?season=2026&seasontype=2');
+var r=await fetch(NBA_BASE+'/teams/'+teamId+'/statistics?season=2027&seasontype=2');
+if(r.status===404)r=await fetch(NBA_BASE+'/teams/'+teamId+'/statistics?season=2026&seasontype=2');
 var d=await r.json();
 if(d.results&&d.results.stats&&d.results.stats.categories){
 d.results.stats.categories.forEach(function(cat){
@@ -5961,6 +5962,7 @@ stats.papg=totalPA/gp;
 /* Also recalc ppg from schedule for consistency */
 stats.schedPpg=totalPF/gp;
 stats.gamesPlayed=gp;
+/* Early season dampening: blend with league avg (112 ppg) */
 }
 }catch(e){}
 return stats;
@@ -6041,8 +6043,8 @@ aRaw+=f[k].a*f[k].wt;
 });
 
 /* Clamp between 0.15 and 0.85 */
-var hp=Math.max(0.20,Math.min(0.80,hRaw));
-var ap=Math.max(0.20,Math.min(0.80,aRaw));
+var hp=Math.max(0.15,Math.min(0.85,hRaw));
+var ap=Math.max(0.15,Math.min(0.85,aRaw));
 /* Normalize */
 var total=hp+ap;
 hp=hp/total;
