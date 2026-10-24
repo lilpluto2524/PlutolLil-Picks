@@ -5915,18 +5915,16 @@ ouLine:ouLine
 };
 }
 
-/* --- NBA Get Team Stats --- */
+
 async function nbaGetTeamStats(teamId){
 try{
-var r=await fetch(NBA_BASE+'/teams/'+teamId+'/statistics?season=2027&seasontype=2');
-if(r.status===404)r=await fetch(NBA_BASE+'/teams/'+teamId+'/statistics?season=2026&seasontype=2');
-var d=await r.json();
 var stats={ppg:0,papg:0,rpg:0,apg:0,fgPct:0,fg3Pct:0,ftPct:0,topg:0,stlpg:0,blkpg:0,pace:0};
+var r=await fetch(NBA_BASE+'/teams/'+teamId+'/statistics?season=2026&seasontype=2');
+var d=await r.json();
 if(d.results&&d.results.stats&&d.results.stats.categories){
 d.results.stats.categories.forEach(function(cat){
 (cat.stats||[]).forEach(function(s){
 if(s.name==='avgPoints')stats.ppg=s.value||0;
-if(s.name==='avgPointsAgainst'||s.name==='avgPointsOpponent')stats.papg=s.value||0;
 if(s.name==='avgRebounds')stats.rpg=s.value||0;
 if(s.name==='avgAssists')stats.apg=s.value||0;
 if(s.name==='fieldGoalPct')stats.fgPct=s.value||0;
@@ -5939,9 +5937,36 @@ if(s.name==='possessions'||s.name==='avgPossessions')stats.pace=s.value||0;
 });
 });
 }
+/* Calculate PAPG from schedule (ESPN has no avgPointsAgainst) */
+try{
+var sr=await fetch(NBA_BASE+'/teams/'+teamId+'/schedule?season=2027');
+if(sr.status===404)sr=await fetch(NBA_BASE+'/teams/'+teamId+'/schedule?season=2026');
+var sd=await sr.json();
+var events=sd.events||[];
+var totalPA=0;var totalPF=0;var gp=0;var curPA=0;var curPF=0;var curGP=0;
+events.forEach(function(ev){
+var comp=ev.competitions&&ev.competitions[ev.competitions.length>0?0:0];
+if(!comp)return;
+var st=comp.status?comp.status.type.name:'';
+if(st!=='STATUS_FINAL')return;
+var hm=comp.competitors.find(function(c){return c.homeAway==='home';});
+var aw=comp.competitors.find(function(c){return c.homeAway==='away';});
+var isHome=String(hm.team.id)===String(teamId);
+var pf=isHome?Number(hm.score.value||hm.score||0):Number(aw.score.value||aw.score||0);
+var pa=isHome?Number(aw.score.value||aw.score||0):Number(hm.score.value||hm.score||0);
+totalPF+=pf;totalPA+=pa;gp++;
+});
+if(gp>0){
+stats.papg=totalPA/gp;
+/* Also recalc ppg from schedule for consistency */
+stats.schedPpg=totalPF/gp;
+stats.gamesPlayed=gp;
+}
+}catch(e){}
 return stats;
 }catch(e){return{ppg:0,papg:0,rpg:0,apg:0,fgPct:0,fg3Pct:0,ftPct:0,topg:0,stlpg:0,blkpg:0,pace:0};}
 }
+
 
 /* --- NBA Prediction Model (15 Factors) --- */
 function nbaPredict(hStats,aStats,hRec,aRec,odds){
@@ -6016,8 +6041,8 @@ aRaw+=f[k].a*f[k].wt;
 });
 
 /* Clamp between 0.15 and 0.85 */
-var hp=Math.max(0.15,Math.min(0.85,hRaw));
-var ap=Math.max(0.15,Math.min(0.85,aRaw));
+var hp=Math.max(0.20,Math.min(0.80,hRaw));
+var ap=Math.max(0.20,Math.min(0.80,aRaw));
 /* Normalize */
 var total=hp+ap;
 hp=hp/total;
