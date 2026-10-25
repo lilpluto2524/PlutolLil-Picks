@@ -3540,18 +3540,8 @@ if(e.w!==newW){
 e.w=newW;
 fixed++;
 }
-/* Score spread */
-if(e.bl&&e.bl.spread){
-var margin=s.hSc-s.aSc;
-var covered=pickIsHome?(margin+e.bl.spread):((-margin)+(-e.bl.spread));
-e.spW=covered>0?true:(covered<0?false:null);
-}
-/* Score O/U */
-if(e.bl&&e.bl.ouLine){
-var total=s.hSc+s.aSc;
-if(e.bl.ouPk==='Over')e.ouW=total>e.bl.ouLine?true:(total<e.bl.ouLine?false:null);
-else e.ouW=total<e.bl.ouLine?true:(total>e.bl.ouLine?false:null);
-}
+if(e.bl&&e.bl.spread){var margin=s.hSc-s.aSc;var pickedHome=(e.pk===e.hT);var pickMargin;if(pickedHome){pickMargin=margin+e.bl.spread;}else{pickMargin=(-margin)+e.bl.spread;}e.spW=pickMargin>0?true:(pickMargin<0?false:null);}
+if(e.bl&&e.bl.mt){var totalPts=s.hSc+s.aSc;var ouPk=e.bl.ouPk||'Over';if(ouPk==='Over')e.ouW=totalPts>e.bl.mt;else e.ouW=totalPts<e.bl.mt;}
 }
 });
 nbaTrk.save();
@@ -5958,11 +5948,15 @@ var pa=isHome?Number(aw.score.value||aw.score||0):Number(hm.score.value||hm.scor
 totalPF+=pf;totalPA+=pa;gp++;
 });
 if(gp>0){
-stats.papg=totalPA/gp;
-/* Also recalc ppg from schedule for consistency */
-stats.schedPpg=totalPF/gp;
+var rawPapg=totalPA/gp;
+var rawPpg=totalPF/gp;
 stats.gamesPlayed=gp;
-/* Early season dampening: blend with league avg (112 ppg) */
+/* Early season regression: blend with league avg (112 ppg) to prevent 1-game blowouts from creating 23pt spreads */
+var leagueAvg=112;
+var regWeight=Math.min(gp/20,1);
+stats.papg=rawPapg*regWeight+leagueAvg*(1-regWeight);
+stats.ppg=rawPpg*regWeight+leagueAvg*(1-regWeight);
+stats.schedPpg=rawPpg;
 }
 }catch(e){}
 return stats;
@@ -6055,7 +6049,7 @@ var conf=Math.abs(hp-ap);
 /* Model total */
 var modelTotal=hStats.ppg+aStats.ppg;
 
-return{hp:hp,ap:ap,conf:conf,f:f,modelTotal:modelTotal};
+var ms=(hStats.ppg-hStats.papg)-(aStats.ppg-aStats.papg);ms=Math.max(-15,Math.min(15,ms));ms=Math.round(ms*2)/2;if(ms>0&&ms<1.5)ms=1.5;if(ms<0&&ms>-1.5)ms=-1.5;if(ms===0)ms=1.5;return{hp:hp,ap:ap,conf:conf,f:f,modelTotal:modelTotal,modelSpread:ms};
 }
 
 /* --- NBA Team Logo Helper --- */
@@ -6354,11 +6348,13 @@ else if(te.w===false)mlResult='mlL';
 /* Spread result */
 var hFinal=g.pg.hScore||0,aFinal=g.pg.aScore||0;
 var margin=hFinal-aFinal;
-var spread=g.odds.spread||0;
+var spread=te.bl?te.bl.spread:(g.odds.spread||0);
 if(spread!==0){
-var covered=margin+spread;
-if(covered>0)spResult='spW';
-else if(covered<0)spResult='spL';
+var pickedHome=(te.pk===g.hI.a);
+var pickMargin;
+if(pickedHome){pickMargin=margin+spread;}else{pickMargin=(-margin)+spread;}
+if(pickMargin>0)spResult='spW';
+else if(pickMargin<0)spResult='spL';
 else spResult='spP';
 }
 /* O/U result */
@@ -6442,7 +6438,7 @@ var spGap=Math.abs(pred.hp-pred.ap);
 if(spGap>0.15)spConf='<div style="font-size:7px;color:#66bb6a;font-weight:800">HIGH</div>';
 else if(spGap>0.08)spConf='<div style="font-size:7px;color:#ffa726;font-weight:800">MED</div>';
 else spConf='<div style="font-size:7px;color:#ef5350;font-weight:800">LOW</div>';
-var modelSpread=((g.hStats.ppg||0)-(g.hStats.papg||0))-((g.aStats.ppg||0)-(g.aStats.papg||0));modelSpread=Math.round(modelSpread*10)/10;h+='<div class="bx" style="'+(spResult==='spW'?'border:2px solid #66bb6a;box-shadow:0 0 6px rgba(102,187,106,0.4)':(spResult==='spL'?'border:2px solid #ef5350;box-shadow:0 0 6px rgba(239,83,80,0.4)':(spResult==='spP'?'border:2px solid #888;box-shadow:0 0 6px rgba(136,136,136,0.4)':'')))+'"><div class="bt">Model Spread</div><div class="bv">'+(modelSpread>0?'+':'')+modelSpread+'</div>'+spConf+'</div>';
+var modelSpread=g.pred.modelSpread||0;var spTeam=modelSpread>0?g.hI.a:g.aI.a;var spDisplay=Math.abs(modelSpread);h+='<div class="bx" style="'+(spResult==='spW'?'border:2px solid #66bb6a;box-shadow:0 0 6px rgba(102,187,106,0.4)':(spResult==='spL'?'border:2px solid #ef5350;box-shadow:0 0 6px rgba(239,83,80,0.4)':(spResult==='spP'?'border:2px solid #888;box-shadow:0 0 6px rgba(136,136,136,0.4)':'')))+'"><div class="bt">Model Spread</div><div class="bv" style="color:'+confClr+'">'+spTeam+' -'+spDisplay+'</div>'+spConf+'</div>';
 
 /* O/U Box */
 var ouConf='';
@@ -6707,6 +6703,8 @@ aML:parseInt(this.getAttribute('data-aml')),
 modelTotal:parseFloat(this.getAttribute('data-mt'))
 };
 nbaTrk.add(gpk,pk,hT,aT,conf,bl);
+nbaTrk.add(gpk+'_spr',pred.modelSpread>0?g.hI.a:g.aI.a,g.hI.a,g.aI.a,conf,{spread:pred.modelSpread,modelTotal:pred.modelTotal,type:'spread'});
+nbaTrk.add(gpk+'_ou',pred.modelTotal>220?'over':'under',g.hI.a,g.aI.a,conf,{modelTotal:pred.modelTotal,type:'ou'});
 this.outerHTML='<span style="font-size:10px;font-weight:800;color:#ffd54f">⏳ Picked: '+pk+'</span>';
 });
 });
@@ -6750,34 +6748,15 @@ games.forEach(function(g){
 window._plpShareData[g.gpk]={gpk:g.gpk,hId:g.pg.hId,aId:g.pg.aId,hI:{n:g.hI.name,a:g.hI.a},aI:{n:g.aI.name,a:g.aI.a},hD:{w:parseInt((g.hI.record||'0-0').split('-'))||0,l:parseInt((g.hI.record||'0-0').split('-'))||0},aD:{w:parseInt((g.aI.record||'0-0').split('-'))||0,l:parseInt((g.aI.record||'0-0').split('-'))||0},pred:g.pred,bl:{spread:g.odds.spread,hML:g.odds.hML,aML:g.odds.aML,ouLine:g.odds.ouLine,ouPk:'Over',modelTotal:((g.pred.hp+g.pred.ap)*100).toFixed(1)},pg:g.pg,time:g.pg.detail||'',sport:'nba'};
 });
 
-/* Auto-track model predictions for every game */
-document.querySelectorAll('.gc[data-gpk^="nba_"]').forEach(function(card){
-var gpk=card.getAttribute('data-gpk');
-var already=nbaTrk.d.p.find(function(e){return e.g===gpk;});
-if(already)return;
-var pickBtn=card.querySelector('.nba-pick-btn');
-var pk='',hT='',aT='',conf=0;
-var bl={spread:0,ouLine:0,ouPk:'',hML:0,aML:0,modelTotal:0};
-if(pickBtn){
-pk=pickBtn.getAttribute('data-pk')||'';
-hT=pickBtn.getAttribute('data-ht')||'';
-aT=pickBtn.getAttribute('data-at')||'';
-conf=parseFloat(pickBtn.getAttribute('data-conf'))||0;
-bl.spread=parseFloat(pickBtn.getAttribute('data-spread'))||0;
-bl.ouLine=parseFloat(pickBtn.getAttribute('data-ouline'))||0;
-bl.ouPk=pickBtn.getAttribute('data-oupk')||'';
-bl.hML=parseInt(pickBtn.getAttribute('data-hml'))||0;
-bl.aML=parseInt(pickBtn.getAttribute('data-aml'))||0;
-bl.modelTotal=parseFloat(pickBtn.getAttribute('data-mt'))||0;
-}else{
-var bx=card.querySelectorAll('.bx');
-if(bx.length>0){
-var txt=bx.length>0?bx[bx.length>0?0:0].textContent:'';
-var m=txt.match(/Pick([A-Z]+)/);
-if(m&&m.length>1)pk=m[m.length>1?1:1];
-}
-}
-if(pk)nbaTrk.add(gpk,pk,hT,aT,conf,bl);
+/* Auto-track model predictions from game data */
+games.forEach(function(g){
+if(!nbaTrk.d.p.find(function(e){return e.g===g.gpk;}))
+{var pred=g.pred;
+var pk=pred.hp>=pred.ap?g.hI.a:g.aI.a;
+var ms=g.pred.modelSpread||0;
+var mt=g.pred.modelTotal||0;
+var ouPk=mt>(g.odds.ouLine||0)?'Over':'Under';
+nbaTrk.add(g.gpk,pk,g.hI.a,g.aI.a,pred.conf,{spread:ms,ouLine:g.odds.ouLine||0,ouPk:ouPk,hML:g.odds.hML||0,aML:g.odds.aML||0,mt:mt});}
 });
 nbaTrk.save();
 
