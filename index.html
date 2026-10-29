@@ -2434,6 +2434,13 @@ h+='<div style="text-align:center;margin:12px 0"><button class="rst-btn" id="pm-
 h+='</div>';
 
 /* ===== SECTION 2: Auto-Suggest Parlay Builder ===== */
+if(SPORT==='nba'){
+h+='<div id="parlay-builder-section">';
+h+='<div style="text-align:center;margin:12px 0"><button class="xb" id="build-parlays-btn" style="background:#89CFF0;color:#0a0a23;font-weight:800;padding:8px 16px;border-radius:6px;font-size:11px">🏀 Generate NBA Smart Parlays</button></div>';
+h+='<div id="parlay-builder-results"></div>';
+h+='</div>';
+}
+
 if(SPORT==='nfl'){
 h+='<div id="parlay-builder-section">';
 h+='<div style="text-align:center;margin:12px 0"><button class="xb" id="build-parlays-btn" style="background:#89CFF0;color:#0a0a23;font-weight:800;padding:8px 16px;border-radius:6px;font-size:11px">🏈 Generate Smart Parlays</button></div>';
@@ -2454,8 +2461,9 @@ if(buildBtn){
 buildBtn.addEventListener('click',function(){
 buildBtn.textContent='⏳ Crunching matchups...';
 buildBtn.disabled=true;
-generateSmartParlays().then(function(){
-buildBtn.textContent='🏈 Refresh Smart Parlays';
+var parlayFn=SPORT==='nba'?generateNBASmartParlays:generateSmartParlays;
+parlayFn().then(function(){
+buildBtn.textContent=SPORT==='nba'?'🏀 Refresh NBA Parlays':'🏈 Refresh Smart Parlays';
 buildBtn.disabled=false;
 });
 });
@@ -2783,6 +2791,207 @@ resultsEl.innerHTML=h;
 resultsEl.innerHTML='<div class="no-data">Error building parlays: '+e.message+'</div>';
 }
 }
+
+
+/* ===== NBA SMART PARLAY GENERATOR ===== */
+async function generateNBASmartParlays(){
+var resultsEl=document.getElementById('parlay-builder-results');
+if(!resultsEl)return;
+resultsEl.innerHTML='<div class="ld"><div class="spin"></div> Analyzing NBA matchups...</div>';
+
+try{
+var ds=nbaViewDate.getFullYear()+''+(nbaViewDate.getMonth()+1<10?'0':'')+(nbaViewDate.getMonth()+1)+(nbaViewDate.getDate()<10?'0':'')+nbaViewDate.getDate();
+var sb=await fetch(NBA_BASE+'/scoreboard?dates='+ds).then(function(r){return r.json();});
+if(!sb||!sb.events||sb.events.length===0){resultsEl.innerHTML='<div class="no-data">No NBA games found for today.</div>';return;}
+
+var matchups=[];
+sb.events.forEach(function(ev){
+var comp=ev.competitions&&ev.competitions[0];
+if(!comp)return;
+var home=null,away=null;
+(comp.competitors||[]).forEach(function(c){
+var info={id:c.team.id,abbr:c.team.abbreviation,name:c.team.displayName||c.team.name};
+if(c.homeAway==='home')home=info;else away=info;
+});
+if(home&&away)matchups.push({home:home,away:away});
+});
+
+/* Fetch stats for all teams */
+var allIds=[];
+matchups.forEach(function(m){
+if(allIds.indexOf(m.home.id)<0)allIds.push(m.home.id);
+if(allIds.indexOf(m.away.id)<0)allIds.push(m.away.id);
+});
+
+var sMap={};
+await Promise.all(allIds.map(async function(tid){
+sMap[tid]=await nbaGetTeamStats(tid).catch(function(){return{ppg:110,papg:110,rpg:44,apg:25};});
+}));
+
+/* Build prop legs from team stats */
+var allLegs=[];
+matchups.forEach(function(m){
+var hS=sMap[m.home.id]||{};
+var aS=sMap[m.away.id]||{};
+var gl=m.home.abbr+' vs '+m.away.abbr;
+
+/* Points prop */
+var hPtsProj=((hS.ppg||110)+(aS.papg||110))/2;
+var aPtsProj=((aS.ppg||110)+(hS.papg||110))/2;
+var hPtsAvg=hS.ppg||110;
+var aPtsAvg=aS.ppg||110;
+var hPtsDiff=hPtsAvg>0?((hPtsProj/hPtsAvg-1)*100):0;
+var aPtsDiff=aPtsAvg>0?((aPtsProj/aPtsAvg-1)*100):0;
+
+/* Rebounds prop */
+var hRebProj=hS.rpg||44;
+var aRebProj=aS.rpg||44;
+
+/* Assists prop */
+var hAstProj=hS.apg||25;
+var aAstProj=aS.apg||25;
+
+/* 3PT prop */
+var h3Proj=hS.fg3Pct?Math.round(hS.fg3Pct*0.35*100)/100:0.35;
+var a3Proj=aS.fg3Pct?Math.round(aS.fg3Pct*0.35*100)/100:0.35;
+
+function matchupRating(diff){
+if(diff>=8)return'SMASH';if(diff>=4)return'GOOD';if(diff>=-4)return'NEUTRAL';if(diff>=-8)return'TOUGH';return'AVOID';
+}
+
+/* Home team legs */
+if(Math.abs(hPtsDiff)>2){
+allLegs.push({team:m.home.abbr,opp:m.away.abbr,game:gl,prop:'Team Points',avg:hPtsAvg,projected:hPtsProj,diff:hPtsDiff,matchup:matchupRating(hPtsDiff),side:'home'});
+}
+allLegs.push({team:m.home.abbr,opp:m.away.abbr,game:gl,prop:'Team Rebounds',avg:hRebProj,projected:hRebProj,diff:((hRebProj/(aRebProj||44)-1)*100),matchup:matchupRating(((hRebProj/(aRebProj||44)-1)*100)),side:'home'});
+allLegs.push({team:m.home.abbr,opp:m.away.abbr,game:gl,prop:'Team Assists',avg:hAstProj,projected:hAstProj,diff:((hAstProj/(aAstProj||25)-1)*100),matchup:matchupRating(((hAstProj/(aAstProj||25)-1)*100)),side:'home'});
+
+/* Away team legs */
+if(Math.abs(aPtsDiff)>2){
+allLegs.push({team:m.away.abbr,opp:m.home.abbr,game:gl,prop:'Team Points',avg:aPtsAvg,projected:aPtsProj,diff:aPtsDiff,matchup:matchupRating(aPtsDiff),side:'away'});
+}
+allLegs.push({team:m.away.abbr,opp:m.home.abbr,game:gl,prop:'Team Rebounds',avg:aRebProj,projected:aRebProj,diff:((aRebProj/(hRebProj||44)-1)*100),matchup:matchupRating(((aRebProj/(hRebProj||44)-1)*100)),side:'away'});
+allLegs.push({team:m.away.abbr,opp:m.home.abbr,game:gl,prop:'Team Assists',avg:aAstProj,projected:aAstProj,diff:((aAstProj/(hAstProj||25)-1)*100),matchup:matchupRating(((aAstProj/(hAstProj||25)-1)*100)),side:'away'});
+});
+
+/* Sort by edge */
+allLegs.sort(function(a,b){return Math.abs(b.diff)-Math.abs(a.diff);});
+
+/* ===== BUILD PARLAYS ===== */
+var sgpParlays=[];
+var crossParlays=[];
+
+/* SGP: Same Game Parlays */
+var gameMap={};
+allLegs.forEach(function(l){if(!gameMap[l.game])gameMap[l.game]=[];gameMap[l.game].push(l);});
+Object.keys(gameMap).forEach(function(game){
+var legs=gameMap[game];
+if(legs.length<2)return;
+for(var i=0;i<Math.min(legs.length,4);i++){
+for(var j=i+1;j<Math.min(legs.length,5);j++){
+if(legs[i].team===legs[j].team&&legs[i].prop===legs[j].prop)continue;
+var avgConf=(Math.abs(legs[i].diff)+Math.abs(legs[j].diff))/2;
+if(avgConf<3)continue;
+sgpParlays.push({game:game,legs:[legs[i],legs[j]],avgEdge:avgConf,legCount:2,impliedProb:0.55*0.55});
+}}
+if(legs.length>=3){
+var top3=legs.filter(function(l){return Math.abs(l.diff)>2;}).slice(0,3);
+if(top3.length>=3){
+sgpParlays.push({game:game,legs:top3,avgEdge:(Math.abs(top3[0].diff)+Math.abs(top3[1].diff)+Math.abs(top3[2].diff))/3,legCount:3,impliedProb:0.50*0.50*0.50});
+}}
+});
+sgpParlays.sort(function(a,b){return b.avgEdge-a.avgEdge;});
+
+/* Cross-Game Parlays */
+if(allLegs.length>=2){
+var used={};var c2=[];
+allLegs.forEach(function(l){if(c2.length>=2)return;if(!used[l.game]){used[l.game]=true;c2.push(l);}});
+if(c2.length>=2)crossParlays.push({legs:c2,avgEdge:(Math.abs(c2[0].diff)+Math.abs(c2[1].diff))/2,legCount:2,impliedProb:0.55*0.55});
+
+used={};var c3=[];
+allLegs.forEach(function(l){if(c3.length>=3)return;if(!used[l.game]){used[l.game]=true;c3.push(l);}});
+if(c3.length>=3)crossParlays.push({legs:c3,avgEdge:(Math.abs(c3[0].diff)+Math.abs(c3[1].diff)+Math.abs(c3[2].diff))/3,legCount:3,impliedProb:0.50*0.50*0.50});
+
+used={};var c4=[];
+allLegs.forEach(function(l){if(c4.length>=4)return;if(!used[l.game]){used[l.game]=true;c4.push(l);}});
+if(c4.length>=4)crossParlays.push({legs:c4,avgEdge:(Math.abs(c4[0].diff)+Math.abs(c4[1].diff)+Math.abs(c4[2].diff)+Math.abs(c4[3].diff))/4,legCount:4,impliedProb:0.45*0.45*0.45*0.45});
+}
+
+/* ===== RENDER ===== */
+var h='';
+function fmtOdds(prob){return prob>=0.5?'-'+Math.round(prob/(1-prob)*100):'+'+Math.round((1-prob)/prob*100);}
+function confClr(m){return m==='SMASH'?'#66bb6a':m==='GOOD'?'#4fc3f7':m==='NEUTRAL'?'#ffd54f':m==='TOUGH'?'#ffa726':'#ef5350';}
+
+/* SGP Section */
+h+='<div style="margin-top:12px">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.min-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\'">';
+h+='<div style="font-size:12px;font-weight:900;color:#89CFF0">🎯 NBA Same Game Parlays (SGP)</div><span class="min-arrow" style="color:#89CFF0;font-size:12px">▼</span></div>';
+h+='<div>';
+
+var sgpByGame={};
+sgpParlays.forEach(function(p){if(!sgpByGame[p.game])sgpByGame[p.game]=[];sgpByGame[p.game].push(p);});
+var gameNames=Object.keys(sgpByGame);
+if(gameNames.length===0){h+='<div class="no-data">Not enough data for SGPs</div>';}
+gameNames.forEach(function(game){
+var parlays=sgpByGame[game];
+var bestEdge=0;parlays.forEach(function(p){if(p.avgEdge>bestEdge)bestEdge=p.avgEdge;});
+var bestClr=bestEdge>=10?'#66bb6a':bestEdge>=5?'#ffd54f':'#ffa726';
+h+='<div style="margin:6px 0;border:1px solid rgba(137,207,240,.1);border-radius:6px;overflow:hidden">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:rgba(137,207,240,.05);cursor:pointer" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.min-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\'">';
+h+='<span style="font-size:10px;font-weight:800;color:#89CFF0">'+game+'</span>';
+h+='<span style="font-size:8px"><span style="color:'+bestClr+';font-weight:700">Best: +'+bestEdge.toFixed(1)+'%</span> | <span style="color:#888">'+parlays.length+' combos</span> <span class="min-arrow" style="color:#89CFF0;font-size:10px">▼</span></span>';
+h+='</div>';
+h+='<div style="padding:4px 8px">';
+parlays.slice(0,5).forEach(function(p,idx){
+var edgeClr=p.avgEdge>=10?'#66bb6a':p.avgEdge>=5?'#ffd54f':'#ffa726';
+h+='<div style="padding:6px 0;'+(idx<4?'border-bottom:1px solid rgba(137,207,240,.06)':'')+'">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">';
+h+='<span style="font-size:9px;font-weight:700;color:#ffd54f">'+p.legCount+'-Leg SGP</span>';
+h+='<span style="font-size:8px"><span style="color:'+edgeClr+';font-weight:700">+'+p.avgEdge.toFixed(1)+'% edge</span> | <span style="color:#888">'+fmtOdds(p.impliedProb)+'</span></span>';
+h+='</div>';
+p.legs.forEach(function(l){
+var mClr=confClr(l.matchup);
+h+='<div style="font-size:9px;padding:1px 0;display:flex;justify-content:space-between">';
+h+='<span><span style="color:#ffd54f;font-weight:700">'+l.team+'</span> '+l.prop+'</span>';
+h+='<span>Avg '+l.avg.toFixed(1)+' <span style="color:'+mClr+';font-weight:700">→ '+l.projected.toFixed(1)+'</span> <span style="color:#66bb6a;font-size:7px">'+(l.diff>0?'+':'')+l.diff.toFixed(0)+'%</span></span>';
+h+='</div>';
+});
+h+='</div>';
+});
+h+='</div></div>';
+});
+h+='</div></div>';
+
+/* Cross-Game Section */
+h+='<div style="margin-top:12px">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="var c=this.nextElementSibling;c.style.display=c.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.min-arrow\').textContent=c.style.display===\'none\'?\'▶\':\'▼\'">';
+h+='<div style="font-size:12px;font-weight:900;color:#89CFF0">🔥 NBA Cross-Game Parlays</div><span class="min-arrow" style="color:#89CFF0;font-size:12px">▼</span></div>';
+h+='<div>';
+if(crossParlays.length===0){h+='<div class="no-data">Not enough data for cross-game parlays</div>';}
+crossParlays.forEach(function(p){
+var edgeClr=p.avgEdge>=10?'#66bb6a':p.avgEdge>=5?'#ffd54f':'#ffa726';
+h+='<div class="gc" style="padding:8px;margin:4px 0">';
+h+='<div style="display:flex;justify-content:space-between;align-items:center">';
+h+='<span style="font-size:10px;font-weight:800;color:#66bb6a">'+p.legCount+'-Leg Power Play</span>';
+h+='<span style="font-size:9px"><span style="color:'+edgeClr+';font-weight:700">+'+p.avgEdge.toFixed(1)+'% avg edge</span> | <span style="color:#888">'+fmtOdds(p.impliedProb)+'</span></span>';
+h+='</div>';
+p.legs.forEach(function(l){
+var mClr=confClr(l.matchup);
+h+='<div style="font-size:9px;padding:2px 0;display:flex;justify-content:space-between">';
+h+='<span><span style="color:#ffd54f;font-weight:700">'+l.team+'</span> '+l.prop+' <span style="color:#888">(vs '+l.opp+')</span></span>';
+h+='<span>Avg '+l.avg.toFixed(1)+' <span style="color:'+mClr+';font-weight:700">→ '+l.projected.toFixed(1)+'</span></span>';
+h+='</div>';
+});
+h+='</div>';
+});
+h+='</div></div>';
+
+resultsEl.innerHTML=h;
+}catch(e){
+resultsEl.innerHTML='<div class="no-data">Error building NBA parlays: '+e.message+'</div>';
+}
+}
+
 
 
 
@@ -5941,7 +6150,7 @@ if(s.name==='avgBlocks')stats.blkpg=parseFloat(s.value)||0;
 });
 }
 try{
-var sr=await fetch(NBA_BASE+'/teams/'+teamId+'/schedule?season=2026&seasontype=2');
+var sr=await fetch(NBA_BASE+'/teams/'+teamId+'/schedule?season=2027&seasontype=2');
 var sd=await sr.json();
 var totalPA=0;var gp=0;var rawPpg=0;
 if(sd&&sd.events){
@@ -5981,143 +6190,157 @@ var now=new Date();
 stats.restDays=Math.floor((now-lastGame)/(1000*60*60*24));
 }
 }
-}catch(e){}
+/* L10 record */
+var recent=sd.events.filter(function(ev){
+var comp=ev.competitions&&ev.competitions.length>0?ev.competitions[ev.competitions.length>0?0:0]:null;
+return comp&&comp.status&&comp.status.type&&comp.status.type.name==='STATUS_FINAL';
+}).slice(-10);
+var rW=0;
+recent.forEach(function(ev){
+var comp=ev.competitions[ev.competitions.length>0?0:0];
+var us=comp.competitors.find(function(c){return parseInt(c.id)===teamId;});
+if(us&&us.winner===true)rW++;
+});
+stats.l10Wpct=recent.length>0?(rW/recent.length):0.5;
+}catch(e){return{ppg:0,papg:0,rpg:0,apg:0,fgPct:0,fg3Pct:0,ftPct:0,topg:0,stlpg:0,blkpg:0,pace:0,schedPpg:0,restDays:0,l10Wpct:0.5};}
 return stats;
-}catch(e){return{ppg:0,papg:0,rpg:0,apg:0,fgPct:0,fg3Pct:0,ftPct:0,topg:0,stlpg:0,blkpg:0,pace:0,schedPpg:0,restDays:0};}
+}catch(e){return{ppg:0,papg:0,rpg:0,apg:0,fgPct:0,fg3Pct:0,ftPct:0,topg:0,stlpg:0,blkpg:0,pace:0,schedPpg:0,restDays:0,l10Wpct:0.5};}
 }
 
 
-/* --- NBA Prediction Model (15 Factors) --- */
+
 function nbaPredict(hStats,aStats,hRec,aRec,odds,hInj,aInj){
 var f={};
 
-/* 1. PPG Differential (20%) */
-var hPpgAdv=(hStats.ppg-aStats.papg)/10;
-var aPpgAdv=(aStats.ppg-hStats.papg)/10;
-f.ppgDiff={h:hPpgAdv,a:aPpgAdv,wt:0.20};
+/* 1. Scoring (PPG vs PAPG) — 15% */
+var hOff=hStats.ppg||110;var hDef=hStats.papg||110;
+var aOff=aStats.ppg||110;var aDef=aStats.papg||110;
+var hExpPts=(hOff+aDef)/2;var aExpPts=(aOff+hDef)/2;
+var ptsDiff=hExpPts-aExpPts;
+f.scoring={h:ptsDiff/100,a:-ptsDiff/100,wt:0.15};
 
-/* 2. Rebounding Edge (10%) */
-var hRebAdv=(hStats.rpg-aStats.rpg)/5;
-f.rebounding={h:hRebAdv,a:-hRebAdv,wt:0.10};
+/* 2. Rebounding — 8% */
+var hRpg=hStats.rpg||43;var aRpg=aStats.rpg||43;
+var rebDiff=(hRpg-aRpg)/43;
+f.rebounding={h:rebDiff*0.5,a:-rebDiff*0.5,wt:0.08};
 
-/* 3. Turnover Margin (10%) */
-var hToAdv=(aStats.topg-hStats.topg)/3;
-f.turnovers={h:hToAdv,a:-hToAdv,wt:0.10};
+/* 3. Turnovers — 8% */
+var hTo=hStats.topg||14;var aTo=aStats.topg||14;
+var toDiff=(aTo-hTo)/14;
+f.turnovers={h:toDiff*0.5,a:-toDiff*0.5,wt:0.08};
 
-/* 4. 3-Point Shooting (10%) */
-var h3Adv=(hStats.fg3Pct-aStats.fg3Pct)*2;
-f.three_pt={h:h3Adv,a:-h3Adv,wt:0.10};
+/* 4. Three-Point Shooting — 7% (fg3Pct is already %, divide by 100) */
+var h3Adv=(hStats.fg3Pct-aStats.fg3Pct)/100*2;
+var a3Adv=(aStats.fg3Pct-hStats.fg3Pct)/100*2;
+f.threePoint={h:h3Adv,a:a3Adv,wt:0.07};
 
-/* 5. FG% Efficiency (8%) */
-var hFgAdv=(hStats.fgPct-aStats.fgPct)*2;
-f.fg_eff={h:hFgAdv,a:-hFgAdv,wt:0.08};
+/* 5. Free Throw % — 5% (ftPct is already %, divide by 100) */
+var hFTAdv=(hStats.ftPct-aStats.ftPct)/100*1.5;
+var aFTAdv=(aStats.ftPct-hStats.ftPct)/100*1.5;
+f.freeThrow={h:hFTAdv,a:aFTAdv,wt:0.05};
 
-/* 6. FT% (5%) */
-var hFtAdv=(hStats.ftPct-aStats.ftPct)*1.5;
-f.ft_pct={h:hFtAdv,a:-hFtAdv,wt:0.05};
+/* 6. Assists — 6% */
+var hApg=hStats.apg||24;var aApg=aStats.apg||24;
+var astDiff=(hApg-aApg)/24;
+f.assists={h:astDiff*0.4,a:-astDiff*0.4,wt:0.06};
 
-/* 7. Assists/Playmaking (7%) */
-var hAstAdv=(hStats.apg-aStats.apg)/4;
-f.assists={h:hAstAdv,a:-hAstAdv,wt:0.07};
+/* 7. Steals — 4% */
+var hStl=hStats.stlpg||7;var aStl=aStats.stlpg||7;
+var stlDiff=(hStl-aStl)/7;
+f.steals={h:stlDiff*0.3,a:-stlDiff*0.3,wt:0.04};
 
-/* 8. Steals + Blocks / Defense (7%) */
-var hDefAdv=((hStats.stlpg+hStats.blkpg)-(aStats.stlpg+aStats.blkpg))/3;
-f.defense={h:hDefAdv,a:-hDefAdv,wt:0.07};
+/* 8. Blocks — 4% */
+var hBlk=hStats.blkpg||5;var aBlk=aStats.blkpg||5;
+var blkDiff=(hBlk-aBlk)/5;
+f.blocks={h:blkDiff*0.3,a:-blkDiff*0.3,wt:0.04};
 
-/* 9. Home Court Advantage (8%) */
-f.homeCourt={h:0.03,a:-0.03,wt:0.08};
+/* 9. Home Court — 5% */
+f.homeCourt={h:0.03,a:-0.03,wt:0.05};
 
-/* 10. Record/Momentum (5%) */
-var hWins=parseInt(hRec.split('-')[0])||0;
-var hLoss=parseInt(hRec.split('-')[1])||0;
-var aWins=parseInt(aRec.split('-')[0])||0;
-var aLoss=parseInt(aRec.split('-')[1])||0;
-var hWpct=(hWins+hLoss>0)?hWins/(hWins+hLoss):0.5;
-var aWpct=(aWins+aLoss>0)?aWins/(aWins+aLoss):0.5;
-f.momentum={h:(hWpct-0.5)*0.5,a:(aWpct-0.5)*0.5,wt:0.05};
+/* 10. Win % — 10% */
+var hW=0.5,aW=0.5;
+if(hRec){var hp=hRec.split?hRec.split('-'):[hRec.w||0,hRec.l||0];hW=Number(hp[0])/(Number(hp[0])+Number(hp[1]))||0.5;}
+if(aRec){var ap2=aRec.split?aRec.split('-'):[aRec.w||0,aRec.l||0];aW=Number(ap2[0])/(Number(ap2[0])+Number(ap2[1]))||0.5;}
+f.winPct={h:(hW-0.5)*0.5,a:(aW-0.5)*0.5,wt:0.10};
 
-/* 11. Pace Factor (5%) — high pace = more variance */
-var avgPace=(hStats.pace+aStats.pace)/2;
-f.pace={h:0,a:0,val:avgPace,wt:0.05};
+/* 11. Pace — 5% */
+var hPace=hStats.pace||((hStats.ppg+hStats.papg)/2);
+var aPace=aStats.pace||((aStats.ppg+aStats.papg)/2);
+var leagAvgPace=112;
+f.pace={h:(hPace-leagAvgPace)/leagAvgPace,a:(aPace-leagAvgPace)/leagAvgPace,wt:0.05};
 
-/* 12. Spread Value (5%) — if model disagrees with Vegas */
+/* 12. Spread Value — 5% */
 if(odds&&odds.spread){
-var modelSpread=(hStats.ppg-hStats.papg)-(aStats.ppg-aStats.papg);
-var vegasSpread=odds.spread;
-var spreadDiff=(modelSpread-vegasSpread)/10;
-f.spreadValue={h:spreadDiff,a:-spreadDiff,wt:0.05};
-}else{
-f.spreadValue={h:0,a:0,wt:0.05};
-}
+var spVal=parseFloat(odds.spread)||0;
+f.spreadValue={h:spVal<0?0.03:(spVal>0?-0.03:0),a:spVal<0?-0.03:(spVal>0?0.03:0),wt:0.05};
+}else{f.spreadValue={h:0,a:0,wt:0.05};}
 
+/* 13. O/U Pace — 3% */
+if(odds&&odds.overUnder){
+var ouVal=parseFloat(odds.overUnder)||220;
+var ouAdj=(ouVal-220)/220;
+f.ouPace={h:ouAdj*0.3,a:ouAdj*0.3,wt:0.03};
+}else{f.ouPace={h:0,a:0,wt:0.03};}
 
-/* 13. Rest Days (back-to-back = huge NBA factor) (wt: 0.08) */
-var hRest=hStats.restDays||1;
-var aRest=aStats.restDays||1;
-var restH=hRest===0?-0.06:(hRest>=2?0.03:0);
-var restA=aRest===0?-0.06:(aRest>=2?0.03:0);
-f.restDays={h:restH,a:restA,wt:0.08};
+/* 14. Rest Days — 8% (cap at 5) */
+var hRest=Math.min(hStats.restDays||1,5);
+var aRest=Math.min(aStats.restDays||1,5);
+var hRestAdv=hRest>=3?0.02:(hRest===2?0.01:(hRest===1?0:-0.02));
+var aRestAdv=aRest>=3?0.02:(aRest===2?0.01:(aRest===1?0:-0.02));
+f.restDays={h:hRestAdv,a:aRestAdv,wt:0.08};
 
-/* 14. Win% Record Strength (wt: 0.06) */
-var hWpct=0.5,aWpct=0.5;
-if(hRec){
-var hParts=(typeof hRec==='string')?hRec.split('-'):[hRec.w||0,hRec.l||0];
-var hW=parseInt(hParts[0])||0;var hL=parseInt(hParts[1])||0;
-if(hW+hL>0)hWpct=hW/(hW+hL);
-}
-if(aRec){
-var aParts=(typeof aRec==='string')?aRec.split('-'):[aRec.w||0,aRec.l||0];
-var aW=parseInt(aParts[0])||0;var aL=parseInt(aParts[1])||0;
-if(aW+aL>0)aWpct=aW/(aW+aL);
-}
-f.record={h:(hWpct-0.5)*0.4,a:(aWpct-0.5)*0.4,wt:0.06};
+/* 15. Recent Form (L10) — 6% */
+var hL10=hStats.l10Wpct||0.5;
+var aL10=aStats.l10Wpct||0.5;
+f.recentForm={h:(hL10-0.5)*0.5,a:(aL10-0.5)*0.5,wt:0.06};
 
-/* 15. Offensive Efficiency — PPG relative to pace (wt: 0.05) */
-var hOffEff=(hStats.pace>0)?(hStats.ppg/hStats.pace)*100:0;
-var aOffEff=(aStats.pace>0)?(aStats.ppg/aStats.pace)*100:0;
-var offDiff=(hOffEff-aOffEff)/100;
-f.offEff={h:Math.max(-0.08,Math.min(0.08,offDiff*0.5)),a:Math.max(-0.08,Math.min(0.08,-offDiff*0.5)),wt:0.05};
+/* 16. Offensive Efficiency — 5% */
+var hOffEff=hStats.ppg/(hPace||112);
+var aOffEff=aStats.ppg/(aPace||112);
+var offEffDiff=(hOffEff-aOffEff);
+f.offEff={h:offEffDiff*2,a:-offEffDiff*2,wt:0.05};
 
-/* 16. Defensive Efficiency — PAPG relative to pace (wt: 0.05) */
-var hDefEff=(hStats.pace>0)?(hStats.papg/hStats.pace)*100:100;
-var aDefEff=(aStats.pace>0)?(aStats.papg/aStats.pace)*100:100;
-var defDiff=(aDefEff-hDefEff)/100;
-f.defEff={h:Math.max(-0.08,Math.min(0.08,defDiff*0.5)),a:Math.max(-0.08,Math.min(0.08,-defDiff*0.5)),wt:0.05};
+/* 17. Defensive Efficiency — 5% */
+var hDefEff=hStats.papg/(hPace||112);
+var aDefEff=aStats.papg/(aPace||112);
+var defEffDiff=(aDefEff-hDefEff);
+f.defEff={h:defEffDiff*2,a:-defEffDiff*2,wt:0.05};
 
-/* 17. Recent Form — last 5 game win% (wt: 0.06) */
-var hL5=hStats.l5Wpct||0.5;
-var aL5=aStats.l5Wpct||0.5;
-f.recentForm={h:(hL5-0.5)*0.3,a:(aL5-0.5)*0.3,wt:0.06};
+/* 18. Injury Impact — 7% */
+var hInjImpact=0,aInjImpact=0;
+if(hInj&&hInj.length>0)hInj.forEach(function(inj){if(inj.status==='Out')hInjImpact-=0.03;else if(inj.status==='Day-To-Day')hInjImpact-=0.01;});
+if(aInj&&aInj.length>0)aInj.forEach(function(inj){if(inj.status==='Out')aInjImpact-=0.03;else if(inj.status==='Day-To-Day')aInjImpact-=0.01;});
+f.injuries={h:aInjImpact,a:hInjImpact,wt:0.07};
 
-/* 18. Injury Impact (wt: 0.07) */
-var hInjImpact=hStats.injuryImpact||0;
-var aInjImpact=aStats.injuryImpact||0;
-f.injuryImpact={h:-aInjImpact*0.1,a:-hInjImpact*0.1,wt:0.07};
-
-/* Calculate final probabilities */
-var hRaw=0.5,aRaw=0.5;
+/* === FINAL CALCULATION === */
+var totalH=0,totalA=0,totalWt=0;
 Object.keys(f).forEach(function(k){
-if(f[k].wt){
-hRaw+=f[k].h*f[k].wt;
-aRaw+=f[k].a*f[k].wt;
-}
+totalH+=f[k].h*f[k].wt;
+totalA+=f[k].a*f[k].wt;
+totalWt+=f[k].wt;
 });
+if(totalWt>0){totalH/=totalWt;totalA/=totalWt;}
+var rawH=0.5+totalH;
+var rawA=0.5+totalA;
+var sum=rawH+rawA;
+rawH/=sum;rawA/=sum;
+var cap=0.85;
+var hp=Math.min(cap,Math.max(1-cap,rawH));
+var ap=Math.min(cap,Math.max(1-cap,rawA));
+var norm=hp+ap;hp/=norm;ap/=norm;
+var conf=Math.max(hp,ap);
 
-/* Clamp between 0.15 and 0.85 */
-var hp=Math.max(0.15,Math.min(0.85,hRaw));
-var ap=Math.max(0.15,Math.min(0.85,aRaw));
-/* Normalize */
-var total=hp+ap;
-hp=hp/total;
-ap=ap/total;
+/* Model Total */
+var modelTotal=Math.round(hExpPts+aExpPts);
 
-var conf=Math.abs(hp-ap);
+/* Model Spread */
+var ms=(hp-ap)*15;
+ms=Math.round(ms*2)/2;
+if(Math.abs(ms)<1.5)ms=ms>=0?1.5:-1.5;
 
-/* Model total */
-var modelTotal=hStats.ppg+aStats.ppg;
-
-var ms=(hStats.ppg-hStats.papg)-(aStats.ppg-aStats.papg);ms=Math.max(-15,Math.min(15,ms));ms=Math.round(ms*2)/2;if(ms>0&&ms<1.5)ms=1.5;if(ms<0&&ms>-1.5)ms=-1.5;if(ms===0)ms=1.5;return{hp:hp,ap:ap,conf:conf,f:f,modelTotal:modelTotal,modelSpread:ms};
+return{hp:hp,ap:ap,conf:conf,f:f,modelTotal:modelTotal,modelSpread:ms};
 }
+
 
 /* --- NBA Team Logo Helper --- */
 function nbaTeamImg(team){
@@ -6270,69 +6493,159 @@ rating:rating
 }
 
 /* ===== NBA PROPS TAB RENDERER ===== */
+
 async function renderNBAPropsTab(){
 var el=document.getElementById('tp-pp');
 if(!el)return;
-el.innerHTML='<div class="ld"><div class="spin"></div><br>Loading NBA props...</div>';
+el.innerHTML='<div class="ld"><div class="spin"></div> Loading NBA Props...</div>';
+
 try{
-var dateStr=nbaViewDate.getFullYear()+''+(nbaViewDate.getMonth()+1<10?'0':'')+(nbaViewDate.getMonth()+1)+(nbaViewDate.getDate()<10?'0':'')+nbaViewDate.getDate();
-var data=await fetch(NBA_BASE+'/scoreboard?dates='+dateStr).then(function(r){return r.json();});
-if(!data.events||data.events.length===0){el.innerHTML='<div class="no-data">No NBA games today for props.</div>';return;}
-var h='<div class="trk"><div class="trk-title">NBA Player Props</div>';
-for(var i=0;i<data.events.length;i++){
-var ev=data.events[i];
-var comp=ev.competitions&&ev.competitions;
-if(!comp)continue;
-var hTeam=null,aTeam=null;
-(comp.competitors||[]).forEach(function(c){
-if(c.homeAway==='home')hTeam=c;
-if(c.homeAway==='away')aTeam=c;
+var games=nbaBestBets||[];
+if(games.length===0){el.innerHTML='<div class="trk"><div class="trk-sec-title">No NBA games loaded</div></div>';return;}
+
+var pstats=JSON.parse(localStorage.getItem('plp_nba_pstats')||'{}');
+
+/* Get league average PAPG from all teams */
+var allPapg=[];
+games.forEach(function(g){
+var hs=g.hStats||{};
+var as=g.aStats||{};
+if(hs.papg>0)allPapg.push(hs.papg);
+if(as.papg>0)allPapg.push(as.papg);
 });
-if(!hTeam||!aTeam)continue;
-var hAbbr=hTeam.team.abbreviation;
-var aAbbr=aTeam.team.abbreviation;
-var hId=hTeam.team.id;
-var aId=aTeam.team.id;
-var statsArr=await Promise.all([nbaGetTeamStats(hId),nbaGetTeamStats(aId)]);
-var hStats=statsArr.shift();
-var aStats=statsArr.shift();
-var rostersArr=await Promise.all([fetchNBARoster(hId),fetchNBARoster(aId)]);
-var hRoster=rostersArr.shift();
-var aRoster=rostersArr.shift();
-h+='<div style="margin:8px 0;padding:6px;background:rgba(137,207,240,.03);border-radius:6px">';
-h+='<div style="font-size:11px;font-weight:800;color:#89CFF0;margin-bottom:4px">'+aAbbr+' @ '+hAbbr+'</div>';
-/* Home team props */
-h+='<div style="font-size:10px;font-weight:700;color:#ffd54f;margin:4px 0">'+hAbbr+'</div>';
-h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
-h+='<tr style="color:#89CFF0;font-weight:600"><td>Player</td><td>Pos</td><td>PTS</td><td>REB</td><td>AST</td><td>3PT</td><td>Rating</td></tr>';
-var allHome=[].concat(hRoster.guards,hRoster.forwards,hRoster.centers);
-allHome.forEach(function(p){
-if(p.status!=='active')return;
-var props=calcNBAPlayerProps(p,hStats,aStats);
-var rClr=props.rating==='SMASH'?'#66bb6a':props.rating==='GOOD'?'#ffd54f':props.rating==='LEAN'?'#ff9800':'#aaa';
-h+='<tr><td style="font-weight:600">'+p.name+'</td><td>'+p.pos+'</td>';
-h+='<td>'+props.ppg+'</td><td>'+props.rpg+'</td><td>'+props.apg+'</td><td>'+props.tpg+'</td>';
-h+='<td style="color:'+rClr+';font-weight:700">'+props.rating+'</td></tr>';
+var leagueAvgPapg=allPapg.length>0?(allPapg.reduce(function(a,b){return a+b;},0)/allPapg.length):112;
+
+var h='<div class="trk">';
+h+='<div class="trk-sec-title" style="font-size:16px;margin-bottom:8px">NBA Player Props</div>';
+
+for(var gi=0;gi<games.length;gi++){
+var g=games[gi];
+var hId=g.hId||g.pg.hId;
+var aId=g.aId||g.pg.aId;
+var hA=g.hI.a;
+var aA=g.aI.a;
+var hStats=g.hStats||{};
+var aStats=g.aStats||{};
+
+h+='<div style="margin:12px 0;padding:10px;background:#1a1a2e;border-radius:8px">';
+h+='<div style="font-size:14px;font-weight:700;color:#ffd54f;margin-bottom:8px;text-align:center">'+hA+' vs '+aA+'</div>';
+
+var hPlayers=pstats['t'+hId]?pstats['t'+hId].players:{};
+var aPlayers=pstats['t'+aId]?pstats['t'+aId].players:{};
+
+h+='<table style="width:100%;font-size:10px;border-collapse:collapse">';
+h+='<tr style="color:#ffd54f;border-bottom:1px solid #333">';
+h+='<th style="text-align:left;padding:3px">Player</th>';
+h+='<th>PPG</th><th>Proj</th>';
+h+='<th>RPG</th><th>Proj</th>';
+h+='<th>APG</th><th>Proj</th>';
+h+='<th>3PM</th><th>Proj</th>';
+h+='<th>Matchup</th>';
+h+='</tr>';
+
+var allPlayers=[];
+var teams=[
+{id:hId,abbr:hA,players:hPlayers,oppStats:aStats,tmStats:hStats,isHome:true},
+{id:aId,abbr:aA,players:aPlayers,oppStats:hStats,tmStats:aStats,isHome:false}
+];
+
+teams.forEach(function(tm){
+var pids=Object.keys(tm.players);
+pids.forEach(function(pid){
+var p=tm.players[pid];
+if(!p.logs||p.logs.length<2)return;
+
+var gp=p.logs.length;
+var totPts=0,totReb=0,totAst=0,tot3pm=0;
+p.logs.forEach(function(lg){
+totPts+=lg.pts||0;totReb+=lg.reb||0;totAst+=lg.ast||0;tot3pm+=lg.tpm||0;
 });
-h+='</table>';
-/* Away team props */
-h+='<div style="font-size:10px;font-weight:700;color:#ffd54f;margin:4px 0">'+aAbbr+'</div>';
-h+='<table style="width:100%;font-size:9px;border-collapse:collapse;color:#e0e0e0">';
-h+='<tr style="color:#89CFF0;font-weight:600"><td>Player</td><td>Pos</td><td>PTS</td><td>REB</td><td>AST</td><td>3PT</td><td>Rating</td></tr>';
-var allAway=[].concat(aRoster.guards,aRoster.forwards,aRoster.centers);
-allAway.forEach(function(p){
-if(p.status!=='active')return;
-var props=calcNBAPlayerProps(p,aStats,hStats);
-var rClr=props.rating==='SMASH'?'#66bb6a':props.rating==='GOOD'?'#ffd54f':props.rating==='LEAN'?'#ff9800':'#aaa';
-h+='<tr><td style="font-weight:600">'+p.name+'</td><td>'+p.pos+'</td>';
-h+='<td>'+props.ppg+'</td><td>'+props.rpg+'</td><td>'+props.apg+'</td><td>'+props.tpg+'</td>';
-h+='<td style="color:'+rClr+';font-weight:700">'+props.rating+'</td></tr>';
+var ppg=totPts/gp;
+var rpg=totReb/gp;
+var apg=totAst/gp;
+var tpm=tot3pm/gp;
+
+/* L5 averages */
+var last5=p.logs.slice(-5);
+var l5pts=0,l5reb=0,l5ast=0,l5tpm=0;
+last5.forEach(function(lg){
+l5pts+=lg.pts||0;l5reb+=lg.reb||0;l5ast+=lg.ast||0;l5tpm+=lg.tpm||0;
 });
+var l5ppg=l5pts/last5.length;
+
+/* MATCHUP ADJUSTMENT — opponent PAPG vs league average */
+var oppPapg=tm.oppStats.papg||leagueAvgPapg;
+var defRatio=oppPapg/leagueAvgPapg;
+
+/* Pace adjustment */
+var tmPace=tm.tmStats.pace||100;
+var oppPace=tm.oppStats.pace||100;
+var paceRatio=(tmPace+oppPace)/200;
+
+/* Hot/cold streak from L5 */
+var streakMult=l5ppg/Math.max(ppg,1);
+streakMult=Math.max(0.9,Math.min(1.1,streakMult));
+
+/* Combined multiplier */
+var mult=defRatio*paceRatio*streakMult;
+mult=Math.max(0.82,Math.min(1.18,mult));
+
+/* Projections */
+var projPts=ppg*mult;
+var projReb=rpg*defRatio*paceRatio;
+var projAst=apg*paceRatio*streakMult;
+var proj3pm=tpm*defRatio*paceRatio;
+
+/* MATCHUP LABEL — based on how much the projection moves from average */
+var pctChange=(projPts-ppg)/Math.max(ppg,1);
+var matchup,mClr;
+if(pctChange>0.06){matchup='SMASH';mClr='#66bb6a';}
+else if(pctChange>0.02){matchup='GOOD';mClr='#81d4fa';}
+else if(pctChange>-0.02){matchup='FAIR';mClr='#ffd54f';}
+else if(pctChange>-0.06){matchup='TOUGH';mClr='#ff9800';}
+else{matchup='AVOID';mClr='#ef5350';}
+
+if(ppg>=5){
+allPlayers.push({
+name:p.name,team:tm.abbr,ppg:ppg,rpg:rpg,apg:apg,tpm:tpm,
+projPts:projPts,projReb:projReb,projAst:projAst,proj3pm:proj3pm,
+matchup:matchup,mClr:mClr,
+ptsDir:projPts>ppg?'▲':'▼',rebDir:projReb>rpg?'▲':'▼',
+astDir:projAst>apg?'▲':'▼',tpmDir:proj3pm>tpm?'▲':'▼',
+ptsDirClr:projPts>ppg?'#66bb6a':'#ef5350',
+rebDirClr:projReb>rpg?'#66bb6a':'#ef5350',
+astDirClr:projAst>apg?'#66bb6a':'#ef5350',
+tpmDirClr:proj3pm>tpm?'#66bb6a':'#ef5350'
+});
+}
+});
+});
+
+allPlayers.sort(function(a,b){return b.ppg-a.ppg;});
+
+allPlayers.forEach(function(p){
+h+='<tr style="border-bottom:1px solid #222">';
+h+='<td style="padding:3px;text-align:left"><span style="color:#aaa;font-size:9px">'+p.team+'</span> '+p.name+'</td>';
+h+='<td style="text-align:center">'+p.ppg.toFixed(1)+'</td>';
+h+='<td style="text-align:center;color:'+p.ptsDirClr+'">'+p.projPts.toFixed(1)+' '+p.ptsDir+'</td>';
+h+='<td style="text-align:center">'+p.rpg.toFixed(1)+'</td>';
+h+='<td style="text-align:center;color:'+p.rebDirClr+'">'+p.projReb.toFixed(1)+' '+p.rebDir+'</td>';
+h+='<td style="text-align:center">'+p.apg.toFixed(1)+'</td>';
+h+='<td style="text-align:center;color:'+p.astDirClr+'">'+p.projAst.toFixed(1)+' '+p.astDir+'</td>';
+h+='<td style="text-align:center">'+p.tpm.toFixed(1)+'</td>';
+h+='<td style="text-align:center;color:'+p.tpmDirClr+'">'+p.proj3pm.toFixed(1)+' '+p.tpmDir+'</td>';
+h+='<td style="text-align:center;color:'+p.mClr+';font-weight:700">'+p.matchup+'</td>';
+h+='</tr>';
+});
+
 h+='</table></div>';
 }
+
 h+='</div>';
 el.innerHTML=h;
-}catch(e){el.innerHTML='<div class="no-data">Error loading props: '+e.message+'</div>';}
+}catch(e){
+el.innerHTML='<div class="trk"><div class="trk-sec-title">Error loading props: '+e.message+'</div></div>';
+}
 }
 
 /* ===== RENDER NBA ROSTER PANEL ===== */
