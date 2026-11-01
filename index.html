@@ -6011,10 +6011,10 @@ el.innerHTML='<div class="no-data">Error loading props: '+e.message+'</div>';
 }
 
 
-
 /* ===== NBA CORE ===== */
 var NBA_BASE='https://site.api.espn.com/apis/site/v2/sports/basketball/nba';
 var nbaViewDate=new Date();
+var nbaTeamNameToAbbr={'Atlanta Hawks':'ATL','Boston Celtics':'BOS','Brooklyn Nets':'BKN','Charlotte Hornets':'CHA','Chicago Bulls':'CHI','Cleveland Cavaliers':'CLE','Dallas Mavericks':'DAL','Denver Nuggets':'DEN','Detroit Pistons':'DET','Golden State Warriors':'GSW','Houston Rockets':'HOU','Indiana Pacers':'IND','LA Clippers':'LAC','Los Angeles Lakers':'LAL','Memphis Grizzlies':'MEM','Miami Heat':'MIA','Milwaukee Bucks':'MIL','Minnesota Timberwolves':'MIN','New Orleans Pelicans':'NOP','New York Knicks':'NYK','Oklahoma City Thunder':'OKC','Orlando Magic':'ORL','Philadelphia 76ers':'PHI','Phoenix Suns':'PHX','Portland Trail Blazers':'POR','Sacramento Kings':'SAC','San Antonio Spurs':'SAS','Toronto Raptors':'TOR','Utah Jazz':'UTA','Washington Wizards':'WSH'};
 
 /* --- NBA Team Logos --- */
 var NBA_LOGOS={};
@@ -6132,7 +6132,7 @@ ouLine:ouLine
 async function nbaGetTeamStats(teamId){
 try{
 var stats={ppg:0,papg:0,rpg:0,apg:0,fgPct:0,fg3Pct:0,ftPct:0,topg:0,stlpg:0,blkpg:0,pace:0,schedPpg:0,restDays:0};
-var r=await fetch(NBA_BASE+'/teams/'+teamId+'/statistics?season=2026');
+var r=await fetch(NBA_BASE+'/teams/'+teamId+'/statistics?season=2027');
 var d=await r.json();
 if(d&&d.results&&d.results.stats&&d.results.stats.categories){
 d.results.stats.categories.forEach(function(cat){
@@ -6331,7 +6331,7 @@ var norm=hp+ap;hp/=norm;ap/=norm;
 var conf=Math.max(hp,ap);
 
 /* Model Total */
-var modelTotal=Math.round(hExpPts+aExpPts);
+var rawTotal=hExpPts+aExpPts;var leagueAvg=220;var gp=Math.min((hStats.gp||4),(aStats.gp||4));var regW=Math.min(gp/20,0.7);var modelTotal=Math.round((rawTotal*regW+leagueAvg*(1-regW))*10)/10;
 
 /* Model Spread */
 var ms=(hp-ap)*15;
@@ -6925,7 +6925,7 @@ var cache=NBAPlayerStatsCache[key];
 
 /* Get team schedule to find completed games */
 try{
-var sched=await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/'+teamId+'/schedule?season=2026').then(function(r){return r.json();});
+var sched=await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/'+teamId+'/schedule?season=2027').then(function(r){return r.json();});
 var completed=(sched.events||[]).filter(function(e){
 return e.competitions&&e.competitions.length>0&&e.competitions[e.competitions.length>0?0:0].status&&e.competitions[e.competitions.length>0?0:0].status.type.completed;
 });
@@ -7065,6 +7065,26 @@ el.innerHTML='<div class="no-data">No NBA games scheduled for this date.</div>';
 return;
 }
 
+/* Fetch all NBA injuries once */
+var nbaInjMap={};
+try{
+var injResp=await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries');
+var injJson=await injResp.json();
+if(injJson&&injJson.injuries){
+injJson.injuries.forEach(function(team){
+var abbr=nbaTeamNameToAbbr[team.displayName]||'';
+if(!abbr)return;
+var outs=[];
+(team.injuries||[]).forEach(function(inj){
+if(inj.status==='Out'||inj.status==='Doubtful'){
+outs.push({name:inj.athlete.displayName,status:inj.status});
+}
+});
+if(outs.length>0)nbaInjMap[abbr]=outs;
+});
+}
+}catch(e){}
+
 var games=[];
 for(var i=0;i<data.events.length;i++){
 var g=nbaParseGame(data.events[i]);
@@ -7079,7 +7099,7 @@ var hStats=statsArr[0];
 var aStats=statsArr[1];
 
 /* Run prediction model */
-g.pred=nbaPredict(hStats,aStats,g.hI.record,g.aI.record,g.odds);
+g.pred=nbaPredict(hStats,aStats,g.hI.record,g.aI.record,g.odds,nbaInjMap[g.hI.a]||[],nbaInjMap[g.aI.a]||[]);
 g.hStats=hStats;
 g.aStats=aStats;
 
@@ -7216,23 +7236,41 @@ else if(te&&te.w===false){card.classList.remove('glow-win');card.classList.add('
 
 /* Wire NBA Injury buttons */
 document.querySelectorAll('.nba-inj-btn').forEach(function(btn){
-btn.addEventListener('click',function(){
+btn.addEventListener('click',async function(){
 var card=this.closest('.gc');
 var existing=card.querySelector('.nba-inj-panel');
 if(existing){existing.remove();return;}
-var hId=this.getAttribute('data-hid');
-var aId=this.getAttribute('data-aid');
 var hA=this.getAttribute('data-ha');
 var aA=this.getAttribute('data-aa');
 var panel=document.createElement('div');
 panel.className='nba-inj-panel';
 panel.innerHTML='<div class="ld"><div class="spin"></div> Loading injuries...</div>';
 card.appendChild(panel);
-Promise.all([fetchNBAInjuries(hId),fetchNBAInjuries(aId)]).then(function(results){
-var homeInj=results.shift();
-var awayInj=results.shift();
-panel.innerHTML='<div style="padding:4px 8px">'+renderNBAInjuryPanel(homeInj,hA)+'<hr style="border-color:rgba(137,207,240,.1);margin:8px 0">'+renderNBAInjuryPanel(awayInj,aA)+'</div>';
+try{
+var r=await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries');
+var d=await r.json();
+var injByAbbr={};
+(d.injuries||[]).forEach(function(team){
+var dn=team.displayName||'';
+var abbr=nbaTeamNameToAbbr[dn]||dn;
+injByAbbr[abbr]=[];
+(team.injuries||[]).forEach(function(inj){
+injByAbbr[abbr].push({name:inj.athlete?inj.athlete.displayName:'Unknown',status:inj.status||'Unknown',detail:inj.details&&inj.details.detail?inj.details.detail:''});
 });
+});
+var h='<div style="padding:8px;font-size:11px">';
+[hA,aA].forEach(function(abbr){
+h+='<div style="font-weight:700;color:#ffd54f;margin-top:6px">'+abbr+' Injuries</div>';
+var list=injByAbbr[abbr]||[];
+if(list.length===0){h+='<div style="color:#888">No injuries reported</div>';return;}
+list.forEach(function(inj){
+var clr=inj.status==='Out'?'#f44336':(inj.status==='Day-To-Day'?'#ffd54f':'#ff9800');
+h+='<div style="margin:2px 0"><span style="color:'+clr+'">●</span> '+inj.name+' — '+inj.status+(inj.detail?' ('+inj.detail+')':'')+'</div>';
+});
+});
+h+='</div>';
+panel.innerHTML=h;
+}catch(e){panel.innerHTML='<div style="color:#f44336;padding:8px">Error loading injuries</div>';}
 });
 });
 
