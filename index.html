@@ -3971,7 +3971,7 @@ prevLiveStates[lg.gpk]=lg;
 document.getElementById('last-upd').textContent='Last updated: '+new Date().toLocaleTimeString();
 }).catch(function(){});
 }else if(SPORT==='nfl'){
-loadNFLGames();
+/* NFL auto-refresh disabled — manual refresh only */
 document.getElementById('last-upd').textContent='Last updated: '+new Date().toLocaleTimeString();
 }else if(SPORT==='nba'){
 fetch(NBA_BASE+'/scoreboard?dates='+nbaViewDate.getFullYear()+''+(nbaViewDate.getMonth()+1<10?'0':'')+(nbaViewDate.getMonth()+1)+(nbaViewDate.getDate()<10?'0':'')+nbaViewDate.getDate())
@@ -6492,7 +6492,8 @@ rating:rating
 };
 }
 
-/* ===== NBA PROPS TAB RENDERER ===== */
+
+/* ===== NBA PROPS TAB RENDERER (FIXED — both teams + RPG fix) ===== */
 
 async function renderNBAPropsTab(){
 var el=document.getElementById('tp-pp');
@@ -6514,6 +6515,63 @@ if(hs.papg>0)allPapg.push(hs.papg);
 if(as.papg>0)allPapg.push(as.papg);
 });
 var leagueAvgPapg=allPapg.length>0?(allPapg.reduce(function(a,b){return a+b;},0)/allPapg.length):112;
+
+/* Fetch ESPN league-wide player stats as fallback */
+var espnPlayerData=null;
+try{
+var espnResp=await fetch('https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/statistics/byathlete?region=us&lang=en&contentorigin=espn&limit=500');
+espnPlayerData=await espnResp.json();
+}catch(e){espnPlayerData=null;}
+
+/* Helper: parse ESPN data for a specific team (with RPG fix) */
+function getESPNPlayersForTeam(teamId){
+if(!espnPlayerData||!espnPlayerData.athletes)return[];
+var cats=espnPlayerData.categories;
+var genLabels=[];var offLabels=[];var genNames=[];
+cats.forEach(function(c){
+if(c.name==='general'){genLabels=c.labels;genNames=c.names||[];}
+if(c.name==='offensive')offLabels=c.labels;
+});
+var gpIdx=genLabels.indexOf('GP');
+var ptsIdx=offLabels.indexOf('PTS');
+var fgaIdx=offLabels.indexOf('FGA');
+var fgPctIdx=offLabels.indexOf('FG%');
+var astIdx=offLabels.indexOf('AST');
+var tpmIdx=offLabels.indexOf('3PM');
+/* Find per-game MIN and REB using names array */
+var minIdx=-1;var rebIdx=-1;
+for(var i=0;i<genNames.length;i++){
+if(genNames[i]==='avgMinutes')minIdx=i;
+if(genNames[i]==='avgRebounds')rebIdx=i;
+}
+if(minIdx===-1)minIdx=genLabels.indexOf('MIN');
+if(rebIdx===-1){for(var j=genLabels.length-1;j>=0;j--){if(genLabels[j]==='REB'){rebIdx=j;break;}}}
+var players=[];
+espnPlayerData.athletes.forEach(function(entry){
+var a=entry.athlete;
+if(String(a.teamId)!==String(teamId))return;
+var gen=null;var off=null;
+entry.categories.forEach(function(c){
+if(c.name==='general')gen=c;
+if(c.name==='offensive')off=c;
+});
+if(!gen||!off)return;
+var gp=gen.values[gpIdx]||1;
+var mpg=gen.values[minIdx]||0;
+var pts=off.values[ptsIdx]||0;
+var fga=off.values[fgaIdx]||0;
+var fgPct=off.values[fgPctIdx]||0;
+var reb=rebIdx>=0?gen.values[rebIdx]||0:0;
+var ast=astIdx>=0?off.values[astIdx]||0:0;
+var tpm=tpmIdx>=0?off.values[tpmIdx]||0:0;
+/* Safety: if totals slipped through, divide by GP */
+if(reb>30)reb=reb/gp;
+if(ast>15)ast=ast/gp;
+if(pts<5&&fga<4)return;
+players.push({name:a.displayName,ppg:pts,rpg:reb,apg:ast,tpm:tpm,fga:fga,fgPct:fgPct,mpg:mpg,fromESPN:true});
+});
+return players;
+}
 
 var h='<div class="trk">';
 h+='<div class="trk-sec-title" style="font-size:16px;margin-bottom:8px">NBA Player Props</div>';
@@ -6551,9 +6609,13 @@ var teams=[
 
 teams.forEach(function(tm){
 var pids=Object.keys(tm.players);
+var hasCachedPlayers=false;
+
+/* Try cached pstats first */
 pids.forEach(function(pid){
 var p=tm.players[pid];
 if(!p.logs||p.logs.length<2)return;
+hasCachedPlayers=true;
 
 var gp=p.logs.length;
 var totPts=0,totReb=0,totAst=0,tot3pm=0;
@@ -6619,6 +6681,49 @@ tpmDirClr:proj3pm>tpm?'#66bb6a':'#ef5350'
 });
 }
 });
+
+/* FALLBACK: If no cached players, use ESPN live data */
+if(!hasCachedPlayers){
+var espnPlayers=getESPNPlayersForTeam(tm.id);
+espnPlayers.forEach(function(ep){
+var ppg=ep.ppg;var rpg=ep.rpg;var apg=ep.apg;var tpm=ep.tpm;
+
+var oppPapg=tm.oppStats.papg||leagueAvgPapg;
+var defRatio=oppPapg/leagueAvgPapg;
+var tmPace=tm.tmStats.pace||100;
+var oppPace=tm.oppStats.pace||100;
+var paceRatio=(tmPace+oppPace)/200;
+var mult=defRatio*paceRatio;
+mult=Math.max(0.82,Math.min(1.18,mult));
+
+var projPts=ppg*mult;
+var projReb=rpg*defRatio*paceRatio;
+var projAst=apg*paceRatio;
+var proj3pm=tpm*defRatio*paceRatio;
+
+var pctChange=(projPts-ppg)/Math.max(ppg,1);
+var matchup,mClr;
+if(pctChange>0.06){matchup='SMASH';mClr='#66bb6a';}
+else if(pctChange>0.02){matchup='GOOD';mClr='#81d4fa';}
+else if(pctChange>-0.02){matchup='FAIR';mClr='#ffd54f';}
+else if(pctChange>-0.06){matchup='TOUGH';mClr='#ff9800';}
+else{matchup='AVOID';mClr='#ef5350';}
+
+if(ppg>=5){
+allPlayers.push({
+name:ep.name,team:tm.abbr,ppg:ppg,rpg:rpg,apg:apg,tpm:tpm,
+projPts:projPts,projReb:projReb,projAst:projAst,proj3pm:proj3pm,
+matchup:matchup,mClr:mClr,
+ptsDir:projPts>ppg?'▲':'▼',rebDir:projReb>rpg?'▲':'▼',
+astDir:projAst>apg?'▲':'▼',tpmDir:proj3pm>tpm?'▲':'▼',
+ptsDirClr:projPts>ppg?'#66bb6a':'#ef5350',
+rebDirClr:projReb>rpg?'#66bb6a':'#ef5350',
+astDirClr:projAst>apg?'#66bb6a':'#ef5350',
+tpmDirClr:proj3pm>tpm?'#66bb6a':'#ef5350'
+});
+}
+});
+}
 });
 
 allPlayers.sort(function(a,b){return b.ppg-a.ppg;});
@@ -6747,7 +6852,7 @@ else ouResult='ouL';
 }
 }
 
-var h='<div class="gc'+glowClass+'" data-gpk="'+g.gpk+'">';
+var h='<div class="gc'+glowClass+'" data-gpk="'+g.gpk+'" data-hid="'+g.hI.id+'" data-aid="'+g.aI.id+'" data-ha="'+g.hI.a+'" data-aa="'+g.aI.a+'">';
 
 /* Favorite Star */
 h+='<button class="fav-star" data-gpk="'+g.gpk+'" title="Favorite">☆</button>';
@@ -7118,6 +7223,69 @@ nbaBestBets=games;
 el.innerHTML=h;
 buildTicker(games,'nba');
 buildDigest(games,'nba');
+
+/* H2H Record */
+(function(){
+var cards=el.querySelectorAll('.gc[data-gpk^="nba_"]');
+cards.forEach(function(card){
+var hId=card.getAttribute('data-hid');
+var aId=card.getAttribute('data-aid');
+var taEls=card.querySelectorAll('.ta');
+var hAbbr=taEls.length>=2?taEls[taEls.length>1?0:0].textContent.trim():'?';
+var aAbbr=taEls.length>=2?taEls[taEls.length>1?1:1].textContent.trim():'?';
+if(!hId||!aId){
+var div=document.createElement('div');
+div.style.cssText='text-align:center;font-size:12px;font-weight:700;color:#ffd54f;padding:4px 0;background:rgba(255,213,79,0.08);border-radius:4px;margin:4px 8px;';
+div.textContent='\u{1F3C0} H2H: '+aAbbr+' 0-0 '+hAbbr;
+var gm=card.querySelector('.gm');
+if(gm)card.insertBefore(div,gm.nextSibling);
+else card.insertBefore(div,card.children[card.children.length>2?2:1]);
+return;
+}
+fetch(NBA_BASE+'/teams/'+aId+'/schedule?season=2027')
+.then(function(r){return r.json();})
+.then(function(d){
+var w=0,l=0;
+(d.events||[]).forEach(function(ev){
+var comp=ev.competitions&&ev.competitions.length>0?ev.competitions[ev.competitions.length>0?0:0]:null;
+if(!comp||!comp.status||comp.status.type.name!=='STATUS_FINAL')return;
+var teams=comp.competitors||[];
+var isMatchup=false;
+teams.forEach(function(t){if(t.team&&t.team.id==hId)isMatchup=true;});
+if(!isMatchup)return;
+var away=teams.find(function(t){return t.homeAway==='away';});
+if(away&&away.team&&away.team.id==aId){
+if(away.winner)w++;else l++;
+}else{
+var home=teams.find(function(t){return t.homeAway==='home';});
+if(home&&home.team&&home.team.id==aId){
+if(home.winner)w++;else l++;
+}
+}
+});
+var div=document.createElement('div');
+var clr=(w>l)?'#66bb6a':(l>w)?'#f44336':'#ffd54f';
+div.style.cssText='text-align:center;font-size:12px;font-weight:700;color:'+clr+';padding:4px 0;background:rgba(255,213,79,0.08);border-radius:4px;margin:4px 8px;';
+div.textContent='\u{1F3C0} H2H: '+aAbbr+' '+w+'-'+l+' '+hAbbr;
+var gm=card.querySelector('.gm');
+if(gm)card.insertBefore(div,gm.nextSibling);
+else card.insertBefore(div,card.children[card.children.length>2?2:1]);
+}).catch(function(){
+var div=document.createElement('div');
+div.style.cssText='text-align:center;font-size:12px;font-weight:700;color:#ffd54f;padding:4px 0;background:rgba(255,213,79,0.08);border-radius:4px;margin:4px 8px;';
+div.textContent='\u{1F3C0} H2H: '+aAbbr+' 0-0 '+hAbbr;
+var gm=card.querySelector('.gm');
+if(gm)card.insertBefore(div,gm.nextSibling);
+else card.insertBefore(div,card.children[card.children.length>2?2:1]);
+});
+});
+})();
+
+
+
+
+
+
 /* Apply glow to scored games */
 document.querySelectorAll('.gc[data-gpk^="nba_"]').forEach(function(card){
 var gpk=card.getAttribute('data-gpk');
@@ -7138,13 +7306,14 @@ var bl={
 spread:parseFloat(this.getAttribute('data-spread')),
 ouLine:parseFloat(this.getAttribute('data-ouline')),
 ouPk:this.getAttribute('data-oupk'),
+spPk:pk,
 hML:parseInt(this.getAttribute('data-hml')),
 aML:parseInt(this.getAttribute('data-aml')),
-modelTotal:parseFloat(this.getAttribute('data-mt'))
+modelTotal:parseFloat(this.getAttribute('data-mt')),
+mt:parseFloat(this.getAttribute('data-mt'))
 };
 nbaTrk.add(gpk,pk,hT,aT,conf,bl);
-nbaTrk.add(gpk+'_spr',pred.modelSpread>0?g.hI.a:g.aI.a,g.hI.a,g.aI.a,conf,{spread:pred.modelSpread,modelTotal:pred.modelTotal,type:'spread'});
-nbaTrk.add(gpk+'_ou',pred.modelTotal>220?'over':'under',g.hI.a,g.aI.a,conf,{modelTotal:pred.modelTotal,type:'ou'});
+nbaTrk.save();
 this.outerHTML='<span style="font-size:10px;font-weight:800;color:#ffd54f">⏳ Picked: '+pk+'</span>';
 });
 });
@@ -7280,6 +7449,242 @@ btn.addEventListener('click',function(){
 var gpk=this.getAttribute('data-gpk');
 var d=window._plpShareData[gpk];
 if(d)generatePickCard(d);
+});
+});
+
+
+
+/* ============================================================
+   NBA FIRST BASKET v2 — Upgraded Model
+   Replaces the entire v1 First Basket section
+   Place after "Wire NBA Share buttons" and BEFORE }catch(e){
+   ============================================================ */
+
+/* --- First Basket v2: Get players with injury filter + starter detection --- */
+function fbV2GetPlayers(espnData,teamId,teamAbbr,injuredMap,oppPapg,teamPace,oppPace){
+if(!espnData||!espnData.athletes)return[];
+var cats=espnData.categories;
+var genLabels=[];var offLabels=[];var genNames=[];
+cats.forEach(function(c){
+if(c.name==='general'){genLabels=c.labels;genNames=c.names||[];}
+if(c.name==='offensive')offLabels=c.labels;
+});
+var gpIdx=genLabels.indexOf('GP');
+var ptsIdx=offLabels.indexOf('PTS');
+var fgaIdx=offLabels.indexOf('FGA');
+var fgPctIdx=offLabels.indexOf('FG%');
+var astIdx=offLabels.indexOf('AST');
+var tpmIdx=offLabels.indexOf('3PM');
+var minIdx=-1;var rebIdx=-1;
+for(var i=0;i<genNames.length;i++){
+if(genNames[i]==='avgMinutes')minIdx=i;
+if(genNames[i]==='avgRebounds')rebIdx=i;
+}
+if(minIdx===-1)minIdx=genLabels.indexOf('MIN');
+if(rebIdx===-1){for(var j=genLabels.length-1;j>=0;j--){if(genLabels[j]==='REB'){rebIdx=j;break;}}}
+
+var injured=injuredMap[teamAbbr]||[];
+var players=[];
+var injuredShare=0;
+
+espnData.athletes.forEach(function(entry){
+var a=entry.athlete;
+if(String(a.teamId)!==String(teamId))return;
+var gen=null;var off=null;
+entry.categories.forEach(function(c){
+if(c.name==='general')gen=c;
+if(c.name==='offensive')off=c;
+});
+if(!gen||!off)return;
+var gp=gen.values[gpIdx]||1;
+var mpg=gen.values[minIdx]||0;
+var pts=off.values[ptsIdx]||0;
+var fga=off.values[fgaIdx]||0;
+var fgPct=off.values[fgPctIdx]||0;
+var reb=rebIdx>=0?gen.values[rebIdx]||0:0;
+if(reb>30)reb=reb/gp;
+var pos=a.position?a.position.abbreviation:'';
+if(pts<3)return;
+
+/* Check if player is injured (OUT or Doubtful) */
+var isOut=injured.some(function(n){
+return a.displayName.indexOf(n)>=0||n.indexOf(a.displayName)>=0;
+});
+
+/* Starter detection: MPG >= 28 */
+var isStarter=mpg>=28;
+
+/* Position factor: guards score first more often historically */
+var posFactor=1.0;
+if(pos==='PG'||pos==='SG'||pos==='G')posFactor=1.15;
+else if(pos==='SF'||pos==='PF'||pos==='F')posFactor=1.05;
+else if(pos==='C')posFactor=0.85;
+
+/* Starter multiplier: starters are on court at tip-off */
+var starterMult=isStarter?1.8:0.3;
+
+/* Pace adjustment */
+var paceAdj=((teamPace||100)+(oppPace||100))/200;
+
+/* Opponent defense adjustment: weaker defense = easier first basket */
+var defAdj=oppPapg?(oppPapg/112):1.0;
+
+/* Center tip-off bonus: starting centers win tip, team gets first possession */
+var centerTip=(pos==='C'&&isStarter)?1.1:1.0;
+
+/* Raw score calculation */
+var scoringRate=(pts/36)*Math.min(mpg,36);
+var effAdj=(fgPct||46)/46;
+var rawScore=scoringRate*effAdj*starterMult*posFactor*paceAdj*defAdj*centerTip;
+
+/* If injured OUT/Doubtful, capture their share for redistribution */
+if(isOut){
+injuredShare+=rawScore;
+return;
+}
+
+players.push({
+name:a.displayName,pos:pos,ppg:pts,fga:fga,fgPct:fgPct,mpg:mpg,
+starter:isStarter,rawScore:rawScore,boost:0
+});
+});
+
+/* Redistribute injured player's probability to healthy teammates */
+if(injuredShare>0&&players.length>0){
+var totalHealthy=0;
+players.forEach(function(p){totalHealthy+=p.rawScore;});
+players.forEach(function(p){
+var share=totalHealthy>0?(p.rawScore/totalHealthy):0;
+p.boost=injuredShare*share;
+p.rawScore+=p.boost;
+});
+}
+
+return players;
+}
+
+/* --- First Basket v2: Normalize probabilities across both teams --- */
+function fbV2Normalize(hPlayers,aPlayers){
+var all=hPlayers.concat(aPlayers);
+var totalRaw=0;
+all.forEach(function(p){totalRaw+=p.rawScore;});
+all.forEach(function(p){
+p.prob=totalRaw>0?(p.rawScore/totalRaw):0;
+p.boostPct=totalRaw>0?(p.boost/totalRaw)*100:0;
+if(p.prob>=0.5){
+p.impliedOdds='-'+Math.round(p.prob/(1-p.prob)*100);
+}else{
+p.impliedOdds='+'+Math.round((1-p.prob)/p.prob*100);
+}
+});
+hPlayers.sort(function(a,b){return b.prob-a.prob;});
+aPlayers.sort(function(a,b){return b.prob-a.prob;});
+}
+
+/* --- First Basket v2: Render panel with injury banner + boost column --- */
+function fbV2Render(players,teamAbbr,injuredNames){
+var accent='#ffa726';
+var h='<div style="font-size:11px;font-weight:800;color:'+accent+';margin-bottom:4px">'+teamAbbr+' First Basket Scorers</div>';
+if(injuredNames&&injuredNames.length>0){
+h+='<div style="font-size:8px;color:#ef5350;margin-bottom:3px">\u{1F6D1} OUT: '+injuredNames.join(', ')+' (boost redistributed)</div>';
+}
+h+='<table style="width:100%;font-size:8px;border-collapse:collapse;color:#e0e0e0">';
+h+='<tr style="color:'+accent+';font-weight:600;border-bottom:1px solid rgba(255,167,38,.1)">';
+h+='<td style="padding:2px">#</td><td>Player</td><td style="text-align:center">Pos</td>';
+h+='<td style="text-align:center">1st%</td><td style="text-align:center">Odds</td>';
+h+='<td style="text-align:center">PPG</td><td style="text-align:center">FGA</td>';
+h+='<td style="text-align:center">FG%</td><td style="text-align:center">MPG</td>';
+h+='<td style="text-align:center">Boost</td></tr>';
+players.slice(0,12).forEach(function(p,i){
+var bg=i%2===0?'rgba(255,167,38,.02)':'transparent';
+var probPct=(p.prob*100).toFixed(1);
+var probColor=p.prob>=0.12?'#66bb6a':p.prob>=0.07?'#ffd54f':p.prob>=0.04?'#ffa726':'#ef5350';
+var oddsColor=p.impliedOdds.charAt(0)==='+'?'#66bb6a':'#ffa726';
+var star=p.starter?'<span style="color:#ffd54f;font-size:7px"> \u2605</span>':'';
+var boostStr=p.boostPct>0?'+'+p.boostPct.toFixed(1)+'%':'\u2014';
+var boostClr=p.boostPct>2?'#66bb6a':p.boostPct>0?'#ffd54f':'#555';
+h+='<tr style="border-bottom:1px solid rgba(255,167,38,.03);background:'+bg+'">';
+h+='<td style="padding:2px;color:#888">'+(i+1)+'</td>';
+h+='<td style="font-weight:600">'+p.name+star+'</td>';
+h+='<td style="text-align:center">'+p.pos+'</td>';
+h+='<td style="text-align:center;font-weight:800;color:'+probColor+'">'+probPct+'%</td>';
+h+='<td style="text-align:center;font-weight:700;color:'+oddsColor+'">'+p.impliedOdds+'</td>';
+h+='<td style="text-align:center">'+p.ppg.toFixed(1)+'</td>';
+h+='<td style="text-align:center">'+p.fga.toFixed(1)+'</td>';
+h+='<td style="text-align:center">'+p.fgPct.toFixed(1)+'%</td>';
+h+='<td style="text-align:center">'+p.mpg.toFixed(1)+'</td>';
+h+='<td style="text-align:center;color:'+boostClr+'">'+boostStr+'</td>';
+h+='</tr>';
+});
+h+='</table>';
+return h;
+}
+
+/* --- Wire NBA First Basket v2 buttons --- */
+document.querySelectorAll('.gc[data-gpk^="nba_"]').forEach(function(card){
+var btnRow=null;
+card.querySelectorAll('button.xb').forEach(function(b){
+if(b.textContent==='Notes')btnRow=b.parentElement;
+});
+if(!btnRow)return;
+var hId=card.getAttribute('data-hid');
+var aId=card.getAttribute('data-aid');
+var hAbbr=card.getAttribute('data-ha');
+var aAbbr=card.getAttribute('data-aa');
+
+var fbBtn=document.createElement('button');
+fbBtn.className='xb nba-fb-btn';
+fbBtn.textContent='First Basket';
+fbBtn.style.marginLeft='4px';
+fbBtn.style.color='#ffa726';
+btnRow.appendChild(fbBtn);
+
+var fbPanel=document.createElement('div');
+fbPanel.className='nba-fb-panel';
+fbPanel.style.cssText='display:none;margin-top:6px;padding:8px;background:rgba(0,0,0,.3);border-radius:8px;border:1px solid rgba(255,167,38,.1)';
+card.appendChild(fbPanel);
+
+fbBtn.addEventListener('click',function(){
+if(fbPanel.style.display==='block'){fbPanel.style.display='none';return;}
+fbPanel.style.display='block';
+fbPanel.innerHTML='<div class="ld"><div class="spin"></div> Calculating First Basket v2...</div>';
+
+/* Fetch both player stats and injuries in parallel */
+Promise.all([
+fetch('https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/statistics/byathlete?region=us&lang=en&contentorigin=espn&limit=500').then(function(r){return r.json();}),
+fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries').then(function(r){return r.json();})
+]).then(function(results){
+var espnData=results.shift();
+var injData=results.shift();
+
+/* Build injury map: team abbreviation -> array of OUT/Doubtful player names */
+var injuredMap={};
+(injData.injuries||[]).forEach(function(team){
+var abbr=team.team?team.team.abbreviation:'';
+(team.injuries||[]).forEach(function(inj){
+var name=inj.athlete?inj.athlete.displayName:'';
+var status=inj.status||'';
+if(name&&(status==='Out'||status==='Doubtful')){
+if(!injuredMap[abbr])injuredMap[abbr]=[];
+injuredMap[abbr].push(name);
+}
+});
+});
+
+/* Get players for each team with injury filtering */
+var hPlayers=fbV2GetPlayers(espnData,hId,hAbbr,injuredMap,112,100,100);
+var aPlayers=fbV2GetPlayers(espnData,aId,aAbbr,injuredMap,112,100,100);
+
+/* Normalize probabilities across both teams to sum to 100% */
+fbV2Normalize(hPlayers,aPlayers);
+
+var hInj=injuredMap[hAbbr]||[];
+var aInj=injuredMap[aAbbr]||[];
+
+fbPanel.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px">'+fbV2Render(hPlayers,hAbbr,hInj)+'</div><div style="flex:1;min-width:140px">'+fbV2Render(aPlayers,aAbbr,aInj)+'</div></div>';
+}).catch(function(e){
+fbPanel.innerHTML='<div style="color:#ef5350;font-size:10px;padding:8px">Error: '+e.message+'</div>';
+});
 });
 });
 
