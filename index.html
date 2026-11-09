@@ -6431,8 +6431,8 @@ if(teams.length===0){el.innerHTML='<div class="no-data">No NBA injuries reported
 var h='<div class="trk"><div class="trk-title">NBA Injury Report</div>';
 h+='<div style="font-size:9px;color:#888;margin:4px 0">Updated: '+new Date().toLocaleString()+'</div>';
 teams.forEach(function(team){
-var tName=(team.team&&team.team.displayName)||'Unknown';
-var tLogo=(team.team&&team.team.logos&&team.team.logos.length>0)?'<img src="'+team.team.logos.href+'" style="width:20px;height:20px;vertical-align:middle;margin-right:4px">':'';
+var tName=(team.team&&team.team.displayName)?team.team.displayName:(team.displayName||'Unknown');
+var tLogo='';
 var injuries=team.injuries||[];
 if(injuries.length===0)return;
 h+='<div style="margin:8px 0;padding:6px;background:rgba(137,207,240,.03);border-radius:6px">';
@@ -6532,7 +6532,7 @@ var oddsData=results[3]||[];
 /* Build injury map */
 var injuredMap={};
 (injData.injuries||[]).forEach(function(team){
-var abbr=team.team?team.team.abbreviation:'';
+var abbr=(team.team&&team.team.abbreviation)?team.team.abbreviation:(nbaTeamNameToAbbr[team.displayName]||'');
 (team.injuries||[]).forEach(function(inj){
 var name=inj.athlete?inj.athlete.displayName:'';
 var status=inj.status||'';
@@ -6702,7 +6702,7 @@ var b2bMult=1.0;
 if(tm.isB2B){b2bMult=isStarter?0.92:0.96;}
 
 var mult=defRatio*paceRatio*streakMult*homeMult*b2bMult*ouRatio;
-mult=Math.max(0.70,Math.min(1.30,mult));
+mult=Math.max(0.85,Math.min(1.15,mult));
 
 var projPts=ppg*mult;
 var projReb=rpg*defRatio*paceRatio*homeMult*b2bMult;
@@ -6711,10 +6711,11 @@ var proj3pm=tpm*defRatio*paceRatio*homeMult*b2bMult*ouRatio;
 
 var pctChange=(projPts-ppg)/Math.max(ppg,1);
 var matchup,mClr;
-if(pctChange>0.06){matchup='SMASH';mClr='#66bb6a';}
-else if(pctChange>0.02){matchup='GOOD';mClr='#81d4fa';}
-else if(pctChange>-0.02){matchup='FAIR';mClr='#ffd54f';}
-else if(pctChange>-0.06){matchup='TOUGH';mClr='#ff9800';}
+var absDelta=projPts-ppg;
+if(absDelta>3.0){matchup='SMASH';mClr='#66bb6a';}
+else if(absDelta>1.0){matchup='GOOD';mClr='#81d4fa';}
+else if(absDelta>-1.0){matchup='FAIR';mClr='#ffd54f';}
+else if(absDelta>-3.0){matchup='TOUGH';mClr='#ff9800';}
 else{matchup='AVOID';mClr='#ef5350';}
 
 if(ppg>=5){
@@ -6736,7 +6737,7 @@ var totalHealthy=0;
 result.forEach(function(p){totalHealthy+=p.ppg;});
 result.forEach(function(p){
 var share=totalHealthy>0?(p.ppg/totalHealthy):0;
-var boost=injuredPPG*share;
+var boost=Math.min(injuredPPG*share,5.0);
 p.projPts+=boost*ouRatio;
 p.delta=p.projPts-p.ppg;
 p.boostPct=(boost/Math.max(p.ppg,1))*100;
@@ -6755,7 +6756,7 @@ else{p.matchup='AVOID';p.mClr='#ef5350';}
 if(!hasCached){
 var espnP=getESPNPlayers(tm.id,tm.abbr,tm.isHome,tm.isB2B,ouRatio);
 espnP.forEach(function(ep){
-var ppg=ep.ppg+ep.injBoost;
+var ppg=ep.ppg+Math.min(ep.injBoost,5.0);
 var rpg=ep.rpg;var apg=ep.apg;var tpm=ep.tpm;
 
 var oppPapg=tm.oppStats.papg||leagueAvgPapg;
@@ -6764,7 +6765,7 @@ var tmPace=tm.tmStats.pace||100;
 var oppPace=tm.oppStats.pace||100;
 var paceRatio=(tmPace+oppPace)/200;
 var mult=defRatio*paceRatio*ep.homeMult*ep.b2bMult*ouRatio;
-mult=Math.max(0.70,Math.min(1.30,mult));
+mult=Math.max(0.85,Math.min(1.15,mult));
 
 var projPts=ppg*mult;
 var projReb=rpg*defRatio*paceRatio*ep.homeMult*ep.b2bMult;
@@ -6773,10 +6774,11 @@ var proj3pm=tpm*defRatio*paceRatio*ep.homeMult*ep.b2bMult*ouRatio;
 
 var pctChange=(projPts-ep.ppg)/Math.max(ep.ppg,1);
 var matchup,mClr;
-if(pctChange>0.06){matchup='SMASH';mClr='#66bb6a';}
-else if(pctChange>0.02){matchup='GOOD';mClr='#81d4fa';}
-else if(pctChange>-0.02){matchup='FAIR';mClr='#ffd54f';}
-else if(pctChange>-0.06){matchup='TOUGH';mClr='#ff9800';}
+var absDelta=projPts-ep.ppg;
+if(absDelta>3.0){matchup='SMASH';mClr='#66bb6a';}
+else if(absDelta>1.0){matchup='GOOD';mClr='#81d4fa';}
+else if(absDelta>-1.0){matchup='FAIR';mClr='#ffd54f';}
+else if(absDelta>-3.0){matchup='TOUGH';mClr='#ff9800';}
 else{matchup='AVOID';mClr='#ef5350';}
 
 var boostPct=ep.injBoost>0?(ep.injBoost/ep.ppg)*100:0;
@@ -6806,8 +6808,8 @@ h+=' <span style="font-size:9px;color:#888;font-weight:400">Proj Total: '+data.t
 if(injNames&&injNames.length>0){
 h+='<div style="font-size:8px;color:#ef5350;margin-bottom:3px">\u{1F6D1} OUT: '+injNames.join(', ')+' (boost redistributed)</div>';
 }
-h+='<table style="width:100%;font-size:9px;border-collapse:collapse">';
-h+='<tr style="color:'+color+';font-weight:600;border-bottom:1px solid #333"><th style="text-align:left;padding:2px">Player</th><th>PPG</th><th>Proj</th><th style="font-size:8px">\u0394</th><th>RPG</th><th>Proj</th><th>APG</th><th>Proj</th><th>3PM</th><th>Proj</th><th>Matchup</th></tr>';
+h+='<table style="width:100%;font-size:9px;border-collapse:collapse;table-layout:fixed">';
+h+='<tr style="color:'+color+';font-weight:600;border-bottom:1px solid #333"><th style="width:22%;text-align:left;padding:2px 4px">Player</th><th style="width:7%;text-align:center">PPG</th><th style="width:9%;text-align:center">Proj</th><th style="width:6%;text-align:center;font-size:8px">\u0394</th><th style="width:7%;text-align:center">RPG</th><th style="width:9%;text-align:center">Proj</th><th style="width:7%;text-align:center">APG</th><th style="width:9%;text-align:center">Proj</th><th style="width:7%;text-align:center">3PM</th><th style="width:9%;text-align:center">Proj</th><th style="width:8%;text-align:center">Matchup</th></tr>';
 data.players.forEach(function(p,i){
 var bg=i%2===0?'rgba(255,255,255,.02)':'transparent';
 var star=p.starter?'<span style="color:#ffd54f;font-size:7px"> \u2605</span>':'';
@@ -7275,7 +7277,7 @@ try{
 var r=await fetch('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries');
 var d=await r.json();
 d.injuries.forEach(function(team){
-var abbr=team.team?team.team.abbreviation:(team.abbreviation||'');
+var abbr=(team.team&&team.team.abbreviation)?team.team.abbreviation:(nbaTeamNameToAbbr[team.displayName]||'');
 if(!abbr)return;
 var players=team.injuries||team.athletes||[];
 var outCount=0;
@@ -7379,58 +7381,59 @@ cards.forEach(function(card){
 var hId=card.getAttribute('data-hid');
 var aId=card.getAttribute('data-aid');
 var taEls=card.querySelectorAll('.ta');
-var hAbbr=taEls.length>=2?taEls[taEls.length>1?0:0].textContent.trim():'?';
-var aAbbr=taEls.length>=2?taEls[taEls.length>1?1:1].textContent.trim():'?';
+var hAbbr=taEls.length>=2?taEls.item(0).textContent.trim():'?';
+var aAbbr=taEls.length>=2?taEls.item(1).textContent.trim():'?';
 if(!hId||!aId){
 var div=document.createElement('div');
 div.style.cssText='text-align:center;font-size:12px;font-weight:700;color:#ffd54f;padding:4px 0;background:rgba(255,213,79,0.08);border-radius:4px;margin:4px 8px;';
-div.textContent='\u{1F3C0} H2H: '+aAbbr+' 0-0 '+hAbbr;
+div.textContent='\u{1F3C0} H2H: '+hAbbr+' 0-0 '+aAbbr;
 var gm=card.querySelector('.gm');
 if(gm)card.insertBefore(div,gm.nextSibling);
 else card.insertBefore(div,card.children[card.children.length>2?2:1]);
 return;
 }
-fetch(NBA_BASE+'/teams/'+aId+'/schedule?season=2027')
+fetch(NBA_BASE+'/teams/'+hId+'/schedule?season=2027')
 .then(function(r){return r.json();})
 .then(function(d){
-var w=0,l=0;
-(d.events||[]).forEach(function(ev){
-var comp=ev.competitions&&ev.competitions.length>0?ev.competitions[ev.competitions.length>0?0:0]:null;
-if(!comp||!comp.status||comp.status.type.name!=='STATUS_FINAL')return;
+var hWins=0,aWins=0;
+var events=d.events||[];
+for(var ei=0;ei<events.length;ei++){
+var ev=events[ei];
+var comps=ev.competitions||[];
+if(comps.length===0)continue;
+var comp=comps.item?comps.item(0):comps[Object.keys(comps)];
+if(!comp||!comp.status||!comp.status.type||comp.status.type.name!=='STATUS_FINAL')continue;
 var teams=comp.competitors||[];
 var isMatchup=false;
-teams.forEach(function(t){if(t.team&&t.team.id==hId)isMatchup=true;});
-if(!isMatchup)return;
-var away=teams.find(function(t){return t.homeAway==='away';});
-if(away&&away.team&&away.team.id==aId){
-if(away.winner)w++;else l++;
-}else{
-var home=teams.find(function(t){return t.homeAway==='home';});
-if(home&&home.team&&home.team.id==aId){
-if(home.winner)w++;else l++;
+for(var ti=0;ti<teams.length;ti++){
+if(teams[ti].team&&String(teams[ti].team.id)===String(aId))isMatchup=true;
+}
+if(!isMatchup)continue;
+for(var ti2=0;ti2<teams.length;ti2++){
+var t=teams[ti2];
+if(t.team&&String(t.team.id)===String(hId)){
+if(t.winner)hWins++;else aWins++;
+break;
 }
 }
-});
+}
 var div=document.createElement('div');
-var clr=(w>l)?'#66bb6a':(l>w)?'#f44336':'#ffd54f';
+var clr=(hWins>aWins)?'#66bb6a':(aWins>hWins)?'#f44336':'#ffd54f';
 div.style.cssText='text-align:center;font-size:12px;font-weight:700;color:'+clr+';padding:4px 0;background:rgba(255,213,79,0.08);border-radius:4px;margin:4px 8px;';
-div.textContent='\u{1F3C0} H2H: '+aAbbr+' '+w+'-'+l+' '+hAbbr;
+div.textContent='\u{1F3C0} H2H: '+hAbbr+' '+aWins+'-'+hWins+' '+aAbbr;
 var gm=card.querySelector('.gm');
 if(gm)card.insertBefore(div,gm.nextSibling);
 else card.insertBefore(div,card.children[card.children.length>2?2:1]);
 }).catch(function(){
 var div=document.createElement('div');
 div.style.cssText='text-align:center;font-size:12px;font-weight:700;color:#ffd54f;padding:4px 0;background:rgba(255,213,79,0.08);border-radius:4px;margin:4px 8px;';
-div.textContent='\u{1F3C0} H2H: '+aAbbr+' 0-0 '+hAbbr;
+div.textContent='\u{1F3C0} H2H: '+hAbbr+' 0-0 '+aAbbr;
 var gm=card.querySelector('.gm');
 if(gm)card.insertBefore(div,gm.nextSibling);
 else card.insertBefore(div,card.children[card.children.length>2?2:1]);
 });
 });
 })();
-
-
-
 
 
 
@@ -7808,7 +7811,7 @@ var injData=results.shift();
 /* Build injury map: team abbreviation -> array of OUT/Doubtful player names */
 var injuredMap={};
 (injData.injuries||[]).forEach(function(team){
-var abbr=team.team?team.team.abbreviation:'';
+var abbr=(team.team&&team.team.abbreviation)?team.team.abbreviation:(({'Atlanta Hawks':'ATL','Boston Celtics':'BOS','Brooklyn Nets':'BKN','Charlotte Hornets':'CHA','Chicago Bulls':'CHI','Cleveland Cavaliers':'CLE','Dallas Mavericks':'DAL','Denver Nuggets':'DEN','Detroit Pistons':'DET','Golden State Warriors':'GS','Houston Rockets':'HOU','Indiana Pacers':'IND','Los Angeles Clippers':'LAC','Los Angeles Lakers':'LAL','Memphis Grizzlies':'MEM','Miami Heat':'MIA','Milwaukee Bucks':'MIL','Minnesota Timberwolves':'MIN','New Orleans Pelicans':'NO','New York Knicks':'NY','Oklahoma City Thunder':'OKC','Orlando Magic':'ORL','Philadelphia 76ers':'PHI','Phoenix Suns':'PHX','Portland Trail Blazers':'POR','Sacramento Kings':'SAC','San Antonio Spurs':'SA','Toronto Raptors':'TOR','Utah Jazz':'UTAH','Washington Wizards':'WSH'})[team.displayName]||'');
 (team.injuries||[]).forEach(function(inj){
 var name=inj.athlete?inj.athlete.displayName:'';
 var status=inj.status||'';
