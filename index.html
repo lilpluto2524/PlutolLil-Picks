@@ -3050,10 +3050,11 @@ e.bl._spreadW=(margin>Math.abs(e.bl.spread));
 /* O/U result: did total go over or under? */
 if(e.bl.ouW!==undefined&&e.bl.ouW!==null){
 e.bl._ouW=e.bl.ouW;
-}else if(e.bl.ouLine&&e.hSc!==null&&e.aSc!==null){
+}else if((e.bl.ouLine||e.bl.mt)&&e.hSc!==null&&e.aSc!==null){
+var _oul=e.bl.ouLine||e.bl.mt;
 var totalPts=e.hSc+e.aSc;
 e.bl._ouActual=totalPts;
-e.bl._ouW=(e.bl.ouPk==='Over'&&totalPts>e.bl.ouLine)||(e.bl.ouPk==='Under'&&totalPts<e.bl.ouLine);
+if(totalPts!==_oul)e.bl._ouW=(e.bl.ouPk==='Over'&&totalPts>_oul)||(e.bl.ouPk==='Under'&&totalPts<_oul);
 }
 }
 /* Infer week from game ID (nfl_401873010 format) or timestamp */
@@ -6185,7 +6186,7 @@ var status=comp.status&&comp.status.type?comp.status.type.name:'';
 if(status!=='STATUS_FINAL')return;
 gp++;
 comp.competitors.forEach(function(c){
-var isTeam=parseInt(c.id)===teamId;
+var isTeam=parseInt(c.id)===parseInt(teamId);
 if(!isTeam)totalPA+=parseInt(c.score&&c.score.value?c.score.value:c.score)||0;
 if(isTeam)rawPpg+=parseInt(c.score&&c.score.value?c.score.value:c.score)||0;
 });
@@ -6222,7 +6223,7 @@ return comp&&comp.status&&comp.status.type&&comp.status.type.name==='STATUS_FINA
 var rW=0;
 recent.forEach(function(ev){
 var comp=ev.competitions[ev.competitions.length>0?0:0];
-var us=comp.competitors.find(function(c){return parseInt(c.id)===teamId;});
+var us=comp.competitors.find(function(c){return parseInt(c.id)===parseInt(teamId);});
 if(us&&us.winner===true)rW++;
 });
 stats.l10Wpct=recent.length>0?(rW/recent.length):0.5;
@@ -6354,8 +6355,24 @@ var ap=Math.min(cap,Math.max(1-cap,rawA));
 var norm=hp+ap;hp/=norm;ap/=norm;
 var conf=Math.max(hp,ap);
 
-/* Model Total */
-var rawTotal=hExpPts+aExpPts;var leagueAvg=220;var gp=Math.min((hStats.gp||4),(aStats.gp||4));var regW=Math.min(gp/20,0.7);var modelTotal=Math.round((rawTotal*regW+leagueAvg*(1-regW))*10)/10;
+/* Model Total (improved: sane-value clamps + pace proxy + regression toward league avg) */
+function _clampN(v,lo,hi,dflt){v=parseFloat(v);if(isNaN(v)||v<=0)return dflt;return Math.max(lo,Math.min(hi,v));}
+var hPpgC=_clampN(hStats.ppg,90,130,112), aPpgC=_clampN(aStats.ppg,90,130,112);
+var hPapgC=_clampN(hStats.papg,90,130,112), aPapgC=_clampN(aStats.papg,90,130,112);
+/* each team's expected points = own offense vs opponent defense */
+var hExp=(hPpgC+aPapgC)/2;
+var aExp=(aPpgC+hPapgC)/2;
+var rawTotal=hExp+aExp;
+/* pace proxy: faster teams (higher combined scoring) scale the total up/down vs league pace */
+var leaguePace=224; /* ~112 per team */
+var paceProxy=(hPpgC+aPpgC+hPapgC+aPapgC)/2/leaguePace;
+paceProxy=Math.max(0.92,Math.min(1.08,paceProxy));
+rawTotal=rawTotal*paceProxy;
+var leagueAvg=224;
+var gp=Math.min((hStats.gp||4),(aStats.gp||4));
+var regW=Math.min(gp/20,0.7);
+var modelTotal=Math.round((rawTotal*regW+leagueAvg*(1-regW))*10)/10;
+modelTotal=Math.max(190,Math.min(260,modelTotal));
 
 /* Model Spread */
 var ms=(hp-ap)*15;
@@ -7454,7 +7471,7 @@ var winner=hSc>aSc?hAbbr:aAbbr;
 nbaTrk.d.p.forEach(function(e){
 if(e.g===gpk&&e.w===null){e.hSc=hSc;e.aSc=aSc;e.w=(e.pk===winner);changed=true;
 if(e.bl){var _tot=hSc+aSc;
-if(e.bl.ouLine){if(_tot===e.bl.ouLine)e.bl.ouW=null;else e.bl.ouW=(e.bl.ouPk==='Over')?(_tot>e.bl.ouLine):(_tot<e.bl.ouLine);}
+var _oul=e.bl.ouLine||e.bl.mt||0;if(_oul){if(_tot===_oul)e.bl.ouW=null;else e.bl.ouW=(e.bl.ouPk==='Over')?(_tot>_oul):(_tot<_oul);}
 if(e.bl.spread!==undefined&&e.bl.spread!==null){var _m=(e.pk===e.hT)?(hSc-aSc):(aSc-hSc);var _sp=Math.abs(e.bl.spread);e.bl.spW=(_m>_sp);if(_m===_sp)e.bl.spW=null;}}
 }
 });
@@ -7740,10 +7757,11 @@ else if(pm<0){boxes[1].style.border=LOSS;boxes[1].style.boxShadow=SL;}
 else {boxes[1].style.border=PUSH;boxes[1].style.boxShadow=SP;}
 }
 /* O/U box (index 2) */
-if(boxes[2]&&hSc!==null&&aSc!==null&&te.bl&&te.bl.ouLine){
+var _oul=(te.bl&&(te.bl.ouLine||te.bl.mt))||0;
+if(boxes[2]&&hSc!==null&&aSc!==null&&_oul){
 var tot=hSc+aSc;var ow;
-if(tot===te.bl.ouLine)ow='P';
-else ow=(te.bl.ouPk==='Over')?(tot>te.bl.ouLine?'W':'L'):(tot<te.bl.ouLine?'W':'L');
+if(tot===_oul)ow='P';
+else ow=(te.bl.ouPk==='Over')?(tot>_oul?'W':'L'):(tot<_oul?'W':'L');
 if(ow==='W'){boxes[2].style.border=WIN;boxes[2].style.boxShadow=SW;}
 else if(ow==='L'){boxes[2].style.border=LOSS;boxes[2].style.boxShadow=SL;}
 else {boxes[2].style.border=PUSH;boxes[2].style.boxShadow=SP;}
@@ -7789,7 +7807,7 @@ if(pick&&pick.w===null){pick.hSc=hSc;pick.aSc=aSc;pick.w=(pick.pk===winner);
 /* ADDITIVE: grade O/U + spread (never touches pick.w / ML) */
 if(pick.bl){
 var _tot=hSc+aSc;
-if(pick.bl.ouLine){if(_tot===pick.bl.ouLine)pick.bl.ouW=null;else pick.bl.ouW=(pick.bl.ouPk==='Over')?(_tot>pick.bl.ouLine):(_tot<pick.bl.ouLine);}
+var _oul=pick.bl.ouLine||pick.bl.mt||0;if(_oul){if(_tot===_oul)pick.bl.ouW=null;else pick.bl.ouW=(pick.bl.ouPk==='Over')?(_tot>_oul):(_tot<_oul);}
 if(pick.bl.spread!==undefined&&pick.bl.spread!==null){var _m=(pick.pk===pick.hT)?(hSc-aSc):(aSc-hSc);var _sp=Math.abs(pick.bl.spread);pick.bl.spW=(_m>_sp);if(_m===_sp)pick.bl.spW=null;}
 }}
 });
