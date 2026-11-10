@@ -3039,14 +3039,18 @@ e.bl.type='ML';
 /* Also tag spread and O/U as separate trackable items */
 if(e.bl&&!e.bl._enriched){
 e.bl._enriched=true;
-/* Spread result: did the picked team cover? */
-if(e.bl.spread!==undefined&&e.hSc!==null&&e.aSc!==null){
+/* Spread result: did the picked team cover? (prefer persisted spW) */
+if(e.bl.spW!==undefined&&e.bl.spW!==null){
+e.bl._spreadW=e.bl.spW;
+}else if(e.bl.spread!==undefined&&e.hSc!==null&&e.aSc!==null){
 var pickIsHome=(e.pk===e.hT);
 var margin=pickIsHome?(e.hSc-e.aSc):(e.aSc-e.hSc);
-e.bl._spreadW=pickIsHome?(margin>Math.abs(e.bl.spread)):(margin>Math.abs(e.bl.spread));
+e.bl._spreadW=(margin>Math.abs(e.bl.spread));
 }
 /* O/U result: did total go over or under? */
-if(e.bl.ouLine&&e.hSc!==null&&e.aSc!==null){
+if(e.bl.ouW!==undefined&&e.bl.ouW!==null){
+e.bl._ouW=e.bl.ouW;
+}else if(e.bl.ouLine&&e.hSc!==null&&e.aSc!==null){
 var totalPts=e.hSc+e.aSc;
 e.bl._ouActual=totalPts;
 e.bl._ouW=(e.bl.ouPk==='Over'&&totalPts>e.bl.ouLine)||(e.bl.ouPk==='Under'&&totalPts<e.bl.ouLine);
@@ -7097,12 +7101,12 @@ var glowClass='';
 var mlResult='',spResult='',ouResult='';
 if(te&&te.w===true)glowClass=' glow-win';
 else if(te&&te.w===false)glowClass=' glow-loss';
-if(g.pg.status==='final'&&te){
+if(te&&te.w!==null){
 /* ML result */
 if(te.w===true)mlResult='mlW';
 else if(te.w===false)mlResult='mlL';
 /* Spread result */
-var hFinal=g.pg.hScore||0,aFinal=g.pg.aScore||0;
+var hFinal=(te.hSc!==null&&te.hSc!==undefined)?te.hSc:(g.pg.hScore||0),aFinal=(te.aSc!==null&&te.aSc!==undefined)?te.aSc:(g.pg.aScore||0);
 var margin=hFinal-aFinal;
 var spread=te.bl?te.bl.spread:(g.odds.spread||0);
 if(spread!==0){
@@ -7448,7 +7452,11 @@ if(c.homeAway==='away'){aSc=parseInt(c.score)||0;aAbbr=c.team.abbreviation;}
 });
 var winner=hSc>aSc?hAbbr:aAbbr;
 nbaTrk.d.p.forEach(function(e){
-if(e.g===gpk&&e.w===null){e.hSc=hSc;e.aSc=aSc;e.w=(e.pk===winner);changed=true;}
+if(e.g===gpk&&e.w===null){e.hSc=hSc;e.aSc=aSc;e.w=(e.pk===winner);changed=true;
+if(e.bl){var _tot=hSc+aSc;
+if(e.bl.ouLine){if(_tot===e.bl.ouLine)e.bl.ouW=null;else e.bl.ouW=(e.bl.ouPk==='Over')?(_tot>e.bl.ouLine):(_tot<e.bl.ouLine);}
+if(e.bl.spread!==undefined&&e.bl.spread!==null){var _m=(e.pk===e.hT)?(hSc-aSc):(aSc-hSc);var _sp=Math.abs(e.bl.spread);e.bl.spW=(_m>_sp);if(_m===_sp)e.bl.spW=null;}}
+}
 });
 });
 if(changed)nbaTrk.save();
@@ -7666,6 +7674,36 @@ games.forEach(function(g){
 window._plpShareData[g.gpk]={gpk:g.gpk,hId:g.pg.hId,aId:g.pg.aId,hI:{n:g.hI.name,a:g.hI.a},aI:{n:g.aI.name,a:g.aI.a},hD:{w:parseInt((g.hI.record||'0-0').split('-'))||0,l:parseInt((g.hI.record||'0-0').split('-'))||0},aD:{w:parseInt((g.aI.record||'0-0').split('-'))||0,l:parseInt((g.aI.record||'0-0').split('-'))||0},pred:g.pred,bl:{spread:g.odds.spread,hML:g.odds.hML,aML:g.odds.aML,ouLine:g.odds.ouLine,ouPk:'Over',modelTotal:((g.pred.hp+g.pred.ap)*100).toFixed(1)},pg:g.pg,time:g.pg.detail||'',sport:'nba'};
 });
 
+/* NEW: merge REAL Vegas totals into each game's odds (match by full team name) */
+try{
+var _oddsRaw=await fetch('https://api.the-odds-api.com/v4/sports/basketball_nba/odds/?apiKey='+ODDS_KEY+'&regions=us&markets=totals,spreads,h2h&oddsFormat=american').then(function(r){return r.json();}).catch(function(){return[];});
+var _oddsByName={};
+(Array.isArray(_oddsRaw)?_oddsRaw:[]).forEach(function(ev){
+var line=null,spread=null,hml=null,aml=null;
+(ev.bookmakers||[]).forEach(function(bk){
+(bk.markets||[]).forEach(function(mk){
+if(mk.key==='totals'&&line===null&&mk.outcomes&&mk.outcomes[0])line=mk.outcomes[0].point;
+if(mk.key==='spreads'&&spread===null&&mk.outcomes){mk.outcomes.forEach(function(o){if(o.name===ev.home_team&&spread===null)spread=o.point;});}
+if(mk.key==='h2h'&&mk.outcomes){mk.outcomes.forEach(function(o){if(o.name===ev.home_team&&hml===null)hml=o.price;if(o.name===ev.away_team&&aml===null)aml=o.price;});}
+});
+});
+_oddsByName[ev.home_team+'|'+ev.away_team]={ouLine:line,spread:spread,hML:hml,aML:aml};
+});
+games.forEach(function(g){
+var key=(g.hI.name||'')+'|'+(g.aI.name||'');
+var o=_oddsByName[key];
+if(o){
+if(o.ouLine!==null&&o.ouLine!==undefined)g.odds.ouLine=o.ouLine;
+if(o.spread!==null&&o.spread!==undefined)g.odds.spread=o.spread;
+if(o.hML!==null&&o.hML!==undefined)g.odds.hML=o.hML;
+if(o.aML!==null&&o.aML!==undefined)g.odds.aML=o.aML;
+/* decide O/U pick vs the real line using model total */
+var mt=(g.pred&&g.pred.modelTotal)||0;
+if(g.odds.ouLine){g.odds.ouPk=mt>g.odds.ouLine?'Over':'Under';}
+}
+});
+}catch(e){}
+
 /* Auto-track model predictions from game data */
 games.forEach(function(g){
 if(!nbaTrk.d.p.find(function(e){return e.g===g.gpk;}))
@@ -7677,6 +7715,52 @@ var ouPk=mt>(g.odds.ouLine||0)?'Over':'Under';
 nbaTrk.add(g.gpk,pk,g.hI.a,g.aI.a,pred.conf,{spread:ms,ouLine:g.odds.ouLine||0,ouPk:ouPk,hML:g.odds.hML||0,aML:g.odds.aML||0,mt:mt});}
 });
 nbaTrk.save();
+
+
+/* Re-apply ML/Spread/O-U box borders from STORED results (runs after scoring) */
+function applyNBABoxBorders(){
+var WIN='2px solid #66bb6a',LOSS='2px solid #ef5350',PUSH='2px solid #888';
+var SW='0 0 6px rgba(102,187,106,0.4)',SL='0 0 6px rgba(239,83,80,0.4)',SP='0 0 6px rgba(136,136,136,0.4)';
+document.querySelectorAll('.gc[data-gpk^="nba_"]').forEach(function(card){
+var gpk=card.getAttribute('data-gpk');
+var te=nbaTrk.d.p.find(function(x){return x.g===gpk;});
+if(!te||te.w===null||te.w===undefined)return;
+var boxes=card.querySelectorAll('.bl .bx');
+if(boxes.length<2)return;
+var hSc=(te.hSc!==null&&te.hSc!==undefined)?te.hSc:null;
+var aSc=(te.aSc!==null&&te.aSc!==undefined)?te.aSc:null;
+/* ML box (index 0) */
+if(boxes[0]){if(te.w===true){boxes[0].style.border=WIN;boxes[0].style.boxShadow=SW;}else if(te.w===false){boxes[0].style.border=LOSS;boxes[0].style.boxShadow=SL;}}
+/* Spread box (index 1) */
+if(boxes[1]&&hSc!==null&&aSc!==null&&te.bl&&te.bl.spread!==undefined&&te.bl.spread!==null&&te.bl.spread!==0){
+var margin=(te.pk===te.hT)?(hSc-aSc):(aSc-hSc);
+var pm=margin+te.bl.spread;
+if(pm>0){boxes[1].style.border=WIN;boxes[1].style.boxShadow=SW;}
+else if(pm<0){boxes[1].style.border=LOSS;boxes[1].style.boxShadow=SL;}
+else {boxes[1].style.border=PUSH;boxes[1].style.boxShadow=SP;}
+}
+/* O/U box (index 2) */
+if(boxes[2]&&hSc!==null&&aSc!==null&&te.bl&&te.bl.ouLine){
+var tot=hSc+aSc;var ow;
+if(tot===te.bl.ouLine)ow='P';
+else ow=(te.bl.ouPk==='Over')?(tot>te.bl.ouLine?'W':'L'):(tot<te.bl.ouLine?'W':'L');
+if(ow==='W'){boxes[2].style.border=WIN;boxes[2].style.boxShadow=SW;}
+else if(ow==='L'){boxes[2].style.border=LOSS;boxes[2].style.boxShadow=SL;}
+else {boxes[2].style.border=PUSH;boxes[2].style.boxShadow=SP;}
+}
+});
+}
+
+/* NEW: apply glow from STORED pick results immediately (independent of any fetch) */
+(function applyNBAGlow(){
+document.querySelectorAll('.gc[data-gpk^="nba_"]').forEach(function(card){
+var gpk=card.getAttribute('data-gpk');
+var te=nbaTrk.d.p.find(function(x){return x.g===gpk;});
+if(te&&te.w===true){card.classList.remove('glow-loss');card.classList.add('glow-win');}
+else if(te&&te.w===false){card.classList.remove('glow-win');card.classList.add('glow-loss');}
+});
+})();
+try{applyNBABoxBorders();}catch(e){}
 
 /* Score + Glow — runs after cards are built */
 fetch(NBA_BASE+'/scoreboard?dates='+dateStr).then(function(r){return r.json();}).then(function(d){
@@ -7701,7 +7785,13 @@ var pickBtn=card.querySelector('.nba-pick-btn');
 if(pickBtn){pick={g:gpk,pk:pickBtn.getAttribute('data-pk'),w:null,hSc:null,aSc:null};nbaTrk.d.p.push(pick);}
 }
 }
-if(pick&&pick.w===null){pick.hSc=hSc;pick.aSc=aSc;pick.w=(pick.pk===winner);}
+if(pick&&pick.w===null){pick.hSc=hSc;pick.aSc=aSc;pick.w=(pick.pk===winner);
+/* ADDITIVE: grade O/U + spread (never touches pick.w / ML) */
+if(pick.bl){
+var _tot=hSc+aSc;
+if(pick.bl.ouLine){if(_tot===pick.bl.ouLine)pick.bl.ouW=null;else pick.bl.ouW=(pick.bl.ouPk==='Over')?(_tot>pick.bl.ouLine):(_tot<pick.bl.ouLine);}
+if(pick.bl.spread!==undefined&&pick.bl.spread!==null){var _m=(pick.pk===pick.hT)?(hSc-aSc):(aSc-hSc);var _sp=Math.abs(pick.bl.spread);pick.bl.spW=(_m>_sp);if(_m===_sp)pick.bl.spW=null;}
+}}
 });
 nbaTrk.save();
 document.querySelectorAll('.gc[data-gpk^="nba_"]').forEach(function(card){
@@ -7710,6 +7800,7 @@ var te=nbaTrk.d.p.find(function(x){return x.g===gpk;});
 if(te&&te.w===true){card.classList.remove('glow-loss');card.classList.add('glow-win');}
 else if(te&&te.w===false){card.classList.remove('glow-win');card.classList.add('glow-loss');}
 });
+try{applyNBABoxBorders();}catch(e){}
 /* NEW: refresh record/digest now that picks are scored */
 try{buildDigest(games,'nba');}catch(e){}
 try{if(document.querySelector('.tab.on[data-t="tk"]'))renderTracker();}catch(e){}
