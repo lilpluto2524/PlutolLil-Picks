@@ -5589,13 +5589,40 @@ return props;
 function renderPlayerPropsPanel(roster,teamAbbr,teamStats,oppStats){
 var posKeys=['qb','rb','wr','te','k'];
 var h='<div style="font-size:11px;font-weight:800;color:#bb86fc;margin-bottom:4px">'+teamAbbr+' Player Props</div>';
+/* --- helpers: injury check + per-game usage --- */
+function _isOut(p){var s=((p.status||'')+'').toLowerCase();return s.indexOf('out')>-1||s.indexOf('doubtful')>-1||s.indexOf('injured')>-1||s==='ir'||s.indexOf('reserve')>-1;}
+function _usage(p){
+var gp=p.gamesPlayed||1;var c=p.statCats||{};
+function val(cat,idx){var t=c[cat]&&c[cat].totals;if(!t||!t[idx])return 0;return t[idx].type==='frac'?(t[idx].num||0):(t[idx].val||0);}
+var passAtt=val('passing',0)?0:0; /* passing[0] is C/ATT frac; use den */
+var pc=c.passing&&c.passing.totals&&c.passing.totals[0];var att=pc?(pc.den||0):0;
+var carries=val('rushing',0);var tgts=val('receiving',5)||val('receiving',0);
+if(p.pos==='QB')return att/gp;
+if(p.pos==='RB'||p.pos==='FB')return (carries+ (val('receiving',0)))/gp;
+if(p.pos==='WR'||p.pos==='TE')return tgts/gp;
+if(p.pos==='K'||p.pos==='PK')return 1; /* kickers: single starter */
+return (carries+tgts)/gp;
+}
+/* min per-game usage to count as a real contributor, per position */
+var MINUSE={qb:10,rb:5,wr:2,te:1.5,k:0};
 posKeys.forEach(function(pk){
-var players=(roster[pk]||[]).filter(function(p){return p.statCats&&Object.keys(p.statCats).length>0;});
+var minU=MINUSE[pk]||0;
+var players=(roster[pk]||[]).filter(function(p){
+if(!p.statCats||Object.keys(p.statCats).length===0)return false;
+if(_isOut(p))return false;              /* drop injured */
+if(_usage(p)<minU)return false;          /* drop low-usage backups */
+return true;
+});
+/* rank by real usage so true starters/rotation surface */
+players.sort(function(a,b){return _usage(b)-_usage(a);});
+/* position caps: QB1 only; RB top3 (committees); WR top4; TE top2; K1 */
+var CAP={qb:1,rb:3,wr:4,te:2,k:1};
+players=players.slice(0,CAP[pk]||3);
 if(players.length===0)return;
 h+='<div style="font-size:9px;font-weight:700;color:#ffd54f;margin:6px 0 3px">'+pk.toUpperCase()+'</div>';
 h+='<table style="width:100%;font-size:8px;border-collapse:collapse;color:#e0e0e0">';
 h+='<tr style="color:#bb86fc;font-weight:600;border-bottom:1px solid rgba(187,134,252,.1)"><td style="padding:2px">Player</td><td style="text-align:center">Prop</td><td style="text-align:center">Avg</td><td style="text-align:center">Proj</td><td style="text-align:center">Szn</td><td style="text-align:center">Matchup</td></tr>';
-players.slice(0,pk==='qb'?3:5).forEach(function(p){
+players.forEach(function(p){
 var pp=calcPlayerProps(p,teamStats,oppStats);
 var star=p.starter?'<span style="color:#ffd54f;font-size:7px"> ★</span>':'';
 var mClr=pp.matchup==='SMASH'?'#66bb6a':pp.matchup==='GOOD'?'#81c784':pp.matchup==='NEUTRAL'?'#ffd54f':pp.matchup==='TOUGH'?'#ffa726':'#ef5350';
@@ -6641,13 +6668,13 @@ fetch('https://api.the-odds-api.com/v4/sports/basketball_nba/odds/?apiKey=156782
 var espnPlayerData=results[0];
 var injData=results[1];
 var ydayData=results[2];
-var oddsData=results[3]||[];
+var oddsData=Array.isArray(results[3])?results[3]:[];
 /* NEW: fetch Odds API events to map games -> eventId for per-player book props */
 var nbaEventMap={};
 try{
 var evList=await fetch('https://api.the-odds-api.com/v4/sports/basketball_nba/events/?apiKey='+ODDS_KEY).then(function(r){return r.json();}).catch(function(){return[];});
 var tnm={'Atlanta Hawks':'ATL','Boston Celtics':'BOS','Brooklyn Nets':'BKN','Charlotte Hornets':'CHA','Chicago Bulls':'CHI','Cleveland Cavaliers':'CLE','Dallas Mavericks':'DAL','Denver Nuggets':'DEN','Detroit Pistons':'DET','Golden State Warriors':'GS','Houston Rockets':'HOU','Indiana Pacers':'IND','Los Angeles Clippers':'LAC','Los Angeles Lakers':'LAL','Memphis Grizzlies':'MEM','Miami Heat':'MIA','Milwaukee Bucks':'MIL','Minnesota Timberwolves':'MIN','New Orleans Pelicans':'NO','New York Knicks':'NY','Oklahoma City Thunder':'OKC','Orlando Magic':'ORL','Philadelphia 76ers':'PHI','Phoenix Suns':'PHX','Portland Trail Blazers':'POR','Sacramento Kings':'SAC','San Antonio Spurs':'SA','Toronto Raptors':'TOR','Utah Jazz':'UTAH','Washington Wizards':'WSH'};
-(evList||[]).forEach(function(e){var h=tnm[e.home_team]||'';var a=tnm[e.away_team]||'';if(h&&a)nbaEventMap[h+'_'+a]=e.id;});
+(Array.isArray(evList)?evList:[]).forEach(function(e){var h=tnm[e.home_team]||'';var a=tnm[e.away_team]||'';if(h&&a)nbaEventMap[h+'_'+a]=e.id;});
 }catch(e){}
 
 
